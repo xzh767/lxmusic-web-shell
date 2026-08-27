@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "id": "example-ammo",
+  "name": "Example Ammo",
+  "versionName": "1.0.0",
+  "baseUrl": "https://example.example",
+  "platforms": {
+    "tx": {"name": "腾讯音乐", "qualities": ["128k", "320k", "flac"]},
+    "wy": {"name": "网易云音乐", "qualities": ["128k", "320k", "flac"]}
+  },
+  "endpoints": {
+    "search": "/api/search",
+    "resolve": "/api/resolve"
+  }
+}
