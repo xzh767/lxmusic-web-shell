@@ -164,7 +164,7 @@ Web Shell 不需要知道 Ammo 背后的具体上游。
 Ammo A → 失败 → Ammo B → 成功
 ```
 
-成功后立即停止，不继续轰击其他 Ammo。
+成功后立即停止，不继续请求其余 Ammo。
 
 ## 完整部署指南
 
@@ -172,10 +172,11 @@ Ammo A → 失败 → Ammo B → 成功
 
 GitHub Pages 适合这个项目，因为 Web Shell 是纯静态前端。
 
-官方入口：
+官方文档：
 
 - https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site
 - https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
+- https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site
 
 步骤：
 
@@ -186,22 +187,20 @@ GitHub Pages 适合这个项目，因为 Web Shell 是纯静态前端。
 5. 保存。
 6. 等待 GitHub Pages 完成部署。
 
-官方文档说明，Pages 可以直接从分支根目录发布，也可以使用 `/docs` 目录；本项目推荐直接发布根目录。citeturn361198search6turn361198search5
+也可以后续使用 GitHub Actions 作为发布方式；对当前纯静态项目，没有必要额外引入构建链。
 
-#### GitHub Pages 自定义域名
+#### 自定义域名
 
-在仓库 Pages 设置中填写你的自定义域名，然后按 DNS 提示配置。
-
-对子域名，通常使用：
+在 Pages 设置中填写自定义域名，并按 DNS 提示配置。对子域名通常使用 CNAME 指向 GitHub Pages 的站点域名，例如：
 
 ```text
 CNAME
 web.example.com  →  username.github.io
 ```
 
-GitHub Pages 支持自定义域名，并支持 HTTPS；正式域名部署后建议打开 **Enforce HTTPS**。citeturn361198search3turn361198search1
+GitHub Pages 支持自定义域名和 HTTPS；证书配置完成后建议启用 **Enforce HTTPS**。
 
-> **注意**：GitHub Pages 是公开发布环境，不要把 API Key、私有上游地址、账号凭据等秘密放进仓库。官方文档也特别提醒 Pages 内容最终面向互联网公开。citeturn361198search7
+> **安全注意**：GitHub Pages 是互联网公开发布环境，不要将 API Key、私有上游地址、账号凭据等敏感数据放进仓库。
 
 ### B. Netlify
 
@@ -219,39 +218,51 @@ Netlify 同样非常适合本项目。
 3. 连接 GitHub。
 4. 选择 `xzh767/lxmusic-web-shell`。
 5. Build command 留空。
-6. Publish directory 使用仓库根目录（常见情况下使用 `.` 或直接使用项目根目录）。
+6. Publish directory 使用仓库根目录。
 7. Publish。
 
-Netlify 的 Git Continuous Deployment 会在仓库 push 后自动重新部署。citeturn361198search0turn361198search2
+项目没有构建步骤，因此不需要 `npm install`、`npm run build` 等设置。
+
+Netlify 支持 Git Continuous Deployment；连接仓库后，新的 push 可以触发新的部署。
 
 #### Netlify Drop
 
-本项目没有构建步骤，也可以直接将项目文件夹拖到 Netlify 的手动部署入口。
+如果只是临时测试，也可以将整个项目文件夹拖到 Netlify Drop。
 
-但用于长期维护时，更推荐连接 GitHub，这样每次更新代码都可以自动部署。
+长期维护建议连接 GitHub，这样更新只需要 push。
 
 ### C. Vercel
 
-Vercel 同样可以把本项目当作纯静态站点部署。
+Vercel 也可以直接作为纯静态托管使用。
 
-步骤通常是：
+官方入口：
+
+- https://vercel.com/new
+- https://vercel.com/docs/deployments/git
+
+#### Git 部署
 
 1. 登录 Vercel。
-2. **Add New → Project**。
-3. Import Git Repository。
-4. 选择 `xzh767/lxmusic-web-shell`。
-5. Framework Preset 选择 **Other**（或让 Vercel 自动识别为静态项目）。
-6. 不需要 Build Command。
-7. Output Directory 保持项目根目录对应的默认设置。
-8. Deploy。
+2. 点击 **Add New → Project**。
+3. 选择 **Import Git Repository**。
+4. 导入 `xzh767/lxmusic-web-shell`。
+5. Framework Preset 选择 **Other** 或保持自动检测。
+6. Build Command 留空。
+7. Root Directory 保持项目根目录。
+8. Output Directory 不做额外构建配置。
+9. Deploy。
 
-如果后续仍保持纯静态结构，通常不需要额外的 Vercel Serverless Function。
+因为 Web Shell 不需要构建，所以 Vercel 只需直接托管项目中的 HTML/CSS/JS。
 
-Vercel 只负责托管 Web Shell；Ammo 仍然是外部 HTTP 服务。
+#### Vercel Drop
 
-### D. 任意静态主机
+Vercel 也支持把文件夹或 ZIP 直接拖到 Vercel Drop。
 
-只要主机能正确提供：
+适合临时演示；长期迭代建议连接 Git 仓库，因为 Git 方式可以保持同一个项目 URL，并在 push 后自动重新部署。
+
+### D. 其他静态托管
+
+任何能够正确提供：
 
 ```text
 /index.html
@@ -259,18 +270,18 @@ Vercel 只负责托管 Web Shell；Ammo 仍然是外部 HTTP 服务。
 /style.css
 ```
 
-并支持浏览器跨域访问 Ammo，就可以部署。
+的静态站点都可以。
 
 例如：
 
 ```text
 Cloudflare Pages
 对象存储静态托管
-Nginx/Apache 静态目录
-CDN 静态站点
+Nginx / Apache 静态目录
+其他 CDN 静态托管
 ```
 
-核心要求不是平台，而是浏览器必须能够访问你的 Ammo API，并通过 CORS 检查。
+最关键的不是托管平台，而是浏览器能够访问 Ammo 的 API，并且 Ammo 正确配置 CORS。
 
 ## Ammo API / 弹药接口
 
@@ -283,17 +294,17 @@ GET  /manifest.json
 POST /api/resolve
 ```
 
-如果还提供搜索，则增加：
+如果提供搜索，再增加：
 
 ```text
 GET /api/search
 ```
 
-完整的开发标准见：
+完整开发标准：
 
 **[`docs/AMMO_STANDARD.md`](docs/AMMO_STANDARD.md)**
 
-紧凑 API 参考见：
+精简 API 参考：
 
 **[`docs/AMMO_API.md`](docs/AMMO_API.md)**
 
@@ -312,13 +323,13 @@ info.type                        request.quality
 return playable URL              { ok: true, url: "..." }
 ```
 
-不同点在于：
+主要区别：
 
-- LX 音源运行在 LX Desktop 的运行时环境中。
-- Ammo 运行在独立服务器/Serverless/PHP/Node/Python/Go 等环境。
-- LX 音源用 LX 内部事件系统通信。
-- Ammo 用普通 HTTP + JSON 通信。
-- Ammo 可以把复杂实现留在服务端，让 Web Shell 只看到一个 Manifest 和标准接口。
+- LX 音源运行在 LX Desktop Runtime 中。
+- Ammo 运行在独立服务器、Serverless、PHP、Node.js、Python、Go 等环境中。
+- LX 音源使用 LX 内部事件系统。
+- Ammo 使用普通 HTTP + JSON。
+- Ammo 可以把复杂实现、凭据、上游地址全部留在服务端。
 
 更多移植说明见 [`docs/AMMO_STANDARD.md`](docs/AMMO_STANDARD.md)。
 
@@ -402,7 +413,7 @@ random / priority
 sequential fallback
 ```
 
-但不建议一次请求同时并发轰击所有上游。
+不建议一次请求同时并发轰击所有上游。
 
 ## 开发 / 本地运行
 
@@ -519,49 +530,60 @@ Author-maintained demonstration Ammo Gateway for learning and API testing.
 - Local Ammo configuration storage
 - Pure static deployment model
 
-## Deployment platforms
+## Deployment
 
 ### GitHub Pages
 
-Use **Settings → Pages → Deploy from a branch**, select `master` and `/ (root)`.
+Open **Settings → Pages**, select **Deploy from a branch**, then choose `master` and `/ (root)`.
 
 Official documentation:
 
 - https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site
 - https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
+- https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site
 
-GitHub Pages supports custom domains and HTTPS. Enable **Enforce HTTPS** after the certificate is provisioned. citeturn361198search6turn361198search3turn361198search1
+GitHub Pages supports custom domains and HTTPS. Enable HTTPS enforcement after the certificate is ready.
 
 ### Netlify
 
-Use **Add new project → Import an existing project**, connect GitHub and select this repository.
+Use **Add new project → Import an existing project**, connect GitHub, and select this repository.
 
-Because the project is static:
+Recommended configuration:
 
 ```text
 Build command: empty
 Publish directory: project root
 ```
 
-Netlify can continuously deploy from Git, so pushes to the repository trigger new deployments. citeturn361198search0turn361198search2
+Netlify also supports Git-based continuous deployment, so later pushes can redeploy the site automatically.
+
+Official documentation:
+
+- https://docs.netlify.com/start/quickstarts/deploy-from-repository/
+- https://docs.netlify.com/deploy/create-deploys/
 
 ### Vercel
 
 Use **Add New → Project → Import Git Repository** and select this repository.
 
-For a static deployment:
+Recommended configuration for this static project:
 
 ```text
 Framework preset: Other / static
 Build command: none
-Output: project root
+Root directory: project root
 ```
 
-No serverless function is required for the Shell itself.
+Vercel also supports drag-and-drop deployment through Vercel Drop for static folders or ZIP files.
 
-### Other hosts
+Official entry points:
 
-Any static host can serve the project as long as browsers can reach the Ammo API and CORS is configured correctly.
+- https://vercel.com/new
+- https://vercel.com/docs/deployments/git
+
+### Other static hosts
+
+Any static host can serve this project as long as browsers can reach the Ammo API and CORS is configured correctly.
 
 ## Ammo standard
 
@@ -584,6 +606,23 @@ Developer documentation:
 - [`docs/AMMO_API.md`](docs/AMMO_API.md)
 
 `AMMO_STANDARD.md` explains the relationship to LX Music Desktop custom sources, the protocol mapping, development model, CORS, caching, fallback and security recommendations.
+
+## Relationship to LX Music Desktop sources
+
+For developers familiar with LX Music Desktop custom sources:
+
+```text
+LX Music source                  Ammo
+────────────────────────────    ────────────────────────────
+globalThis.lx                    ordinary HTTP server runtime
+EVENT_NAMES.request              POST /api/resolve
+EVENT_NAMES.inited               GET /manifest.json
+info.musicInfo                   request.musicInfo / id
+info.type                        request.quality
+return playable URL              { ok: true, url: "..." }
+```
+
+The main difference is runtime isolation: LX custom sources run in LX Desktop's runtime, while Ammo is a standalone HTTP service. This makes it possible to keep implementation details and secrets server-side.
 
 ## CORS
 
