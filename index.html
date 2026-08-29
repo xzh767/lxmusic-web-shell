@@ -17,7 +17,7 @@
         <h1>🎵 LX Music Web Shell</h1>
         <p>搜索、选择、解析与播放；实际音源由外部“弹药”接口提供。</p>
       </div>
-      <button id="settingsButton" class="ghost-button">⚙️ 装弹管理</button>
+      <button id="settingsButton" type="button" class="ghost-button">⚙️ 装弹管理</button>
     </header>
 
     <main>
@@ -34,15 +34,15 @@
         <div class="section-head">
           <div>
             <h2>🔎 搜索音乐</h2>
-            <p>选择一个已装载的弹药源，或明确选择“聚合搜索”。默认不替你选择任何平台。</p>
+            <p>搜索由独立的音乐平台搜索服务处理，与已装载弹药解耦；默认不替你选择搜索平台。</p>
           </div>
         </div>
         <div class="search-row">
           <input id="keyword" type="search" maxlength="120" placeholder="歌曲、歌手或关键词" autocomplete="off">
           <select id="ammoSelect">
-            <option value="">请选择搜索源</option>
+            <option value="">请选择搜索平台</option>
           </select>
-          <button id="searchButton" class="primary-button">搜索</button>
+          <button id="searchButton" type="button" class="primary-button">搜索</button>
         </div>
         <div id="searchNotice" class="notice hidden"></div>
         <div id="searchResults" class="results"></div>
@@ -64,7 +64,7 @@
           <select id="qualitySelect">
             <option value="">请选择音质</option>
           </select>
-          <button id="resolveButton" class="secondary-button">解析</button>
+          <button id="resolveButton" type="button" class="secondary-button">解析</button>
         </div>
         <div id="resolveNotice" class="notice hidden"></div>
         <audio id="audio" controls preload="metadata"></audio>
@@ -99,11 +99,11 @@
           <h2>⚙️ 装弹管理</h2>
           <p>填写外部弹药接口的 Manifest URL。页面会读取公开的标准接口描述。</p>
         </div>
-        <button value="cancel" class="icon-button" aria-label="关闭">✕</button>
+        <button id="closeSettingsButton" type="button" class="icon-button" aria-label="关闭">✕</button>
       </div>
 
       <label for="manifestUrl">Manifest URL</label>
-      <input id="manifestUrl" type="url" placeholder="https://example.com/manifest.json" required>
+      <input id="manifestUrl" type="url" placeholder="https://example.com/manifest.json" autocomplete="url">
       <div class="form-actions">
         <button type="button" id="loadAmmoButton" class="primary-button">装载</button>
         <button type="button" id="clearAmmoButton" class="danger-button">清空本地弹药</button>
