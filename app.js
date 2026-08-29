@@ -3,13 +3,23 @@
 
   const STORAGE_KEY = 'lx-web-shell-ammo-v1';
   const DEFAULT_LIMIT = 20;
+  const DEFAULT_RETRIES = 3;
+  // Set window.LX_WEB_SHELL_SEARCH_API to override this endpoint for your deployment.
+  // The search service is intentionally independent from Ammo manifests.
+  const SEARCH_API_URL = window.LX_WEB_SHELL_SEARCH_API || 'https://music-ammo-api-gateway.xlz767.dpdns.org/api/search.php';
+  const PLATFORM_NAMES = {
+    kg: '酷狗音乐',
+    tx: '腾讯音乐',
+    mg: '咪咕音乐',
+    wy: '网易云音乐',
+    kw: '酷我音乐',
+  };
+
   const state = {
     ammo: loadAmmo(),
     activeResults: [],
-    activeQuery: '',
     busy: false,
     platformMap: new Map(),
-    qualityMap: new Map(),
   };
 
   const $ = (id) => document.getElementById(id);
@@ -32,7 +42,7 @@
   }
 
   function endpoint(base, path) {
-    return new URL(path, `${normalizeBase(base)}/`).toString();
+    return new URL(path || '/', `${normalizeBase(base)}/`).toString();
   }
 
   function escapeHtml(value) {
@@ -76,13 +86,43 @@
     console.groupEnd();
   }
 
+  function isTransientError(error) {
+    return error?.transient === true || /^(HTTP (429|408|5\d\d)|network|timeout|failed to fetch|fetch)/i.test(String(error?.message || error));
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function fetchJsonWithRetry(url, options = {}, retries = DEFAULT_RETRIES) {
+    let lastError;
+    for (let attempt = 1; attempt <= retries; attempt += 1) {
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          const error = new Error(`HTTP ${response.status}`);
+          error.status = response.status;
+          error.transient = response.status === 408 || response.status === 429 || response.status >= 500;
+          throw error;
+        }
+        return await response.json();
+      } catch (error) {
+        lastError = error;
+        if (attempt >= retries || !isTransientError(error)) throw error;
+        const delay = 300 * (2 ** (attempt - 1));
+        console.warn(`[重试] 第 ${attempt} 次失败，${delay}ms 后开始第 ${attempt + 1}/${retries} 次`, error);
+        await sleep(delay);
+      }
+    }
+    throw lastError || new Error('请求失败');
+  }
+
   function validateManifest(manifest, manifestUrl) {
     if (!manifest || typeof manifest !== 'object') throw new Error('Manifest 不是 JSON 对象');
     if (!manifest.id || !manifest.name) throw new Error('Manifest 缺少 id 或 name');
     if (!manifest.baseUrl) throw new Error('Manifest 缺少 baseUrl');
-    if (!manifest.endpoints?.search || !manifest.endpoints?.resolve) {
-      throw new Error('Manifest 必须提供 search / resolve endpoint');
-    }
+    if (!manifest.endpoints?.resolve) throw new Error('Manifest 必须提供 resolve endpoint');
+
     const url = new URL(manifest.baseUrl, manifestUrl);
     return {
       ...manifest,
@@ -93,9 +133,7 @@
   }
 
   async function fetchManifest(url) {
-    const response = await fetch(url, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Manifest HTTP ${response.status}`);
-    return validateManifest(await response.json(), url);
+    return validateManifest(await fetchJsonWithRetry(url, { cache: 'no-store' }), url);
   }
 
   function addOrReplaceAmmo(manifest) {
@@ -105,7 +143,6 @@
     saveAmmo();
     renderAmmo();
     renderPlatformOptions();
-    renderAmmoSelect();
   }
 
   function removeAmmo(id) {
@@ -113,11 +150,11 @@
     saveAmmo();
     renderAmmo();
     renderPlatformOptions();
-    renderAmmoSelect();
   }
 
   function renderAmmo() {
-    $('ammoCount').textContent = `${state.ammo.length} 个弹药源`;
+    const count = $('ammoCount');
+    if (count) count.textContent = `${state.ammo.length} 个弹药源`;
     const list = $('ammoList');
     const loader = $('loaderList');
     const content = state.ammo.length
@@ -126,35 +163,36 @@
             <div class="ammo-main">
               <strong>${escapeHtml(ammo.name)}</strong>
               <span>${escapeHtml(ammo.id)}</span>
-              <small>${escapeHtml(ammo.version || '未标版本')} · ${escapeHtml(ammo.baseUrl)}</small>
+              <small>${escapeHtml(ammo.versionName || ammo.version || '未标版本')} · ${escapeHtml(ammo.baseUrl)}</small>
             </div>
-            <button class="danger-outline" data-remove-ammo="${escapeHtml(ammo.id)}">卸载</button>
+            <button type="button" class="danger-outline" data-remove-ammo="${escapeHtml(ammo.id)}">卸载</button>
           </div>`).join('')
       : '<div class="empty">尚未装载任何弹药。请先打开“装弹管理”。</div>';
 
-    list.innerHTML = content;
-    loader.innerHTML = content;
-    [list, loader].forEach((container) => {
+    [list, loader].filter(Boolean).forEach((container) => {
+      container.innerHTML = content;
       container.querySelectorAll('[data-remove-ammo]').forEach((button) => {
         button.addEventListener('click', () => removeAmmo(button.dataset.removeAmmo));
       });
     });
   }
 
-  function renderAmmoSelect() {
+  function renderSearchSourceOptions() {
     const select = $('ammoSelect');
+    if (!select) return;
     const value = select.value;
-    select.innerHTML = '<option value="">请选择搜索源</option>' +
-      '<option value="__all__">聚合搜索（全部已装载源）</option>' +
-      state.ammo.map((ammo) => `<option value="${escapeHtml(ammo.id)}">${escapeHtml(ammo.name)}</option>`).join('');
-    if (state.ammo.some((a) => a.id === value) || value === '__all__') select.value = value;
+    select.innerHTML = `
+      <option value="">请选择搜索平台</option>
+      <option value="__all__">聚合搜索（全部平台）</option>
+      ${Object.entries(PLATFORM_NAMES).map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}`;
+    if (value === '__all__' || PLATFORM_NAMES[value]) select.value = value;
   }
 
   function collectPlatforms(ammoList) {
     const map = new Map();
     for (const ammo of ammoList) {
       for (const [id, meta] of Object.entries(ammo.platforms || {})) {
-        if (!map.has(id)) map.set(id, { id, name: meta?.name || id, qualities: new Set(meta?.qualities || []) });
+        if (!map.has(id)) map.set(id, { id, name: meta?.name || PLATFORM_NAMES[id] || id, qualities: new Set(meta?.qualities || []) });
         else for (const q of (meta?.qualities || [])) map.get(id).qualities.add(q);
       }
     }
@@ -165,6 +203,7 @@
     const map = collectPlatforms(state.ammo);
     state.platformMap = map;
     const select = $('platformSelect');
+    if (!select) return;
     const current = select.value;
     select.innerHTML = '<option value="">请选择平台</option>' +
       [...map.values()].map((meta) => `<option value="${escapeHtml(meta.id)}">${escapeHtml(meta.name)}</option>`).join('');
@@ -173,53 +212,42 @@
   }
 
   function renderQualityOptions() {
-    const platform = $('platformSelect').value;
+    const platform = $('platformSelect')?.value;
     const select = $('qualitySelect');
+    if (!select) return;
     const old = select.value;
     const qualities = platform && state.platformMap.has(platform)
       ? [...state.platformMap.get(platform).qualities]
       : [];
-    state.qualityMap = new Map(qualities.map((q) => [q, q]));
     select.innerHTML = '<option value="">请选择音质</option>' + qualities.map((q) => `<option value="${escapeHtml(q)}">${escapeHtml(q)}</option>`).join('');
-    if (state.qualityMap.has(old)) select.value = old;
+    if (qualities.includes(old)) select.value = old;
   }
 
   function selectedAmmo() {
-    const value = $('ammoSelect').value;
-    if (!value) return [];
-    if (value === '__all__') return state.ammo.slice();
-    return state.ammo.filter((ammo) => ammo.id === value);
+    // Resolve intentionally falls back to all currently loaded Ammo in load order.
+    // Search source selection is independent and does not inspect Ammo manifests.
+    return state.ammo.slice();
   }
 
-  async function ammoSearch(ammo, keyword, platform = '', page = 1) {
-    const url = endpoint(ammo.baseUrl, ammo.endpoints.search);
-    const params = new URLSearchParams({ q: keyword, keyword, page: String(page), limit: String(DEFAULT_LIMIT) });
-    if (platform) params.set('source', platform);
-    const started = performance.now();
-    const response = await fetch(`${url}?${params.toString()}`, { cache: 'no-store' });
-    const elapsed = Math.round(performance.now() - started);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    if (!data?.ok) throw new Error(data?.message || '上游搜索失败');
-    return { ammo, elapsed, results: Array.isArray(data.results) ? data.results : [] };
-  }
-
-  async function aggregateSearch(ammoList, keyword, platform = '') {
-    const settled = await Promise.allSettled(ammoList.map((ammo) => ammoSearch(ammo, keyword, platform)));
-    const results = [];
-    const errors = [];
-    settled.forEach((item, index) => {
-      const ammo = ammoList[index];
-      if (item.status === 'fulfilled') results.push(...item.value.results.map((r) => ({ ...r, __ammo: ammo })));
-      else errors.push(`${ammo.name}: ${item.reason?.message || item.reason}`);
+  async function searchPlatform(platform, keyword, page = 1) {
+    const params = new URLSearchParams({
+      q: keyword,
+      keyword,
+      source: platform || '',
+      page: String(page),
+      limit: String(DEFAULT_LIMIT),
     });
-    return { results, errors };
+    const started = performance.now();
+    const data = await fetchJsonWithRetry(`${SEARCH_API_URL}?${params.toString()}`, { cache: 'no-store' });
+    const elapsed = Math.round(performance.now() - started);
+    if (!data?.ok) throw new Error(data?.message || '搜索失败');
+    return { elapsed, results: Array.isArray(data.results) ? data.results : [], errors: data.errors || [] };
   }
 
   function dedupeResults(results) {
     const seen = new Set();
     return results.filter((item) => {
-      const key = `${item.source || ''}|${item.id || ''}|${item.name || ''}`;
+      const key = `${item.source || ''}|${item.id || ''}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -228,67 +256,64 @@
 
   function renderResults(results, errors = []) {
     const box = $('searchResults');
+    if (!box) return;
     if (!results.length) {
       box.innerHTML = '<div class="empty">没有找到结果。</div>';
-      if (errors.length) showNotice('searchNotice', `部分搜索源失败：${errors.join('；')}`, 'warning');
+      if (errors.length) showNotice('searchNotice', `部分平台搜索失败：${errors.join('；')}`, 'warning');
       return;
     }
-    const names = new Map();
-    state.ammo.forEach((ammo) => {
-      for (const [id, meta] of Object.entries(ammo.platforms || {})) names.set(id, meta?.name || id);
-    });
     box.innerHTML = results.map((item, index) => `
       <article class="result-row">
         <div class="result-cover">${item.picture ? `<img src="${escapeHtml(item.picture)}" alt="">` : '🎵'}</div>
         <div class="result-copy">
           <strong>${escapeHtml(item.name || '未知歌曲')}</strong>
           <span>${escapeHtml(item.artist || item.singer || '未知歌手')}${item.album ? ` · ${escapeHtml(item.album)}` : ''}</span>
-          <small>${escapeHtml(names.get(item.source) || item.source || '未知平台')}${item.duration ? ` · ${formatDuration(item.duration)}` : ''} · ${escapeHtml(item.__ammo?.name || '')}</small>
+          <small>${escapeHtml(PLATFORM_NAMES[item.source] || item.source || '未知平台')}${item.duration ? ` · ${formatDuration(item.duration)}` : ''}</small>
         </div>
-        <button class="use-button" data-result-index="${index}">使用</button>
+        <button type="button" class="use-button" data-result-index="${index}">使用</button>
       </article>`).join('');
     box.querySelectorAll('[data-result-index]').forEach((button) => {
       button.addEventListener('click', () => useResult(results[Number(button.dataset.resultIndex)]));
     });
-    if (errors.length) showNotice('searchNotice', `部分搜索源失败：${errors.join('；')}`, 'warning');
+    if (errors.length) showNotice('searchNotice', `部分平台搜索失败：${errors.join('；')}`, 'warning');
   }
 
   function useResult(item) {
-    $('platformSelect').value = item.source || '';
+    const platform = $('platformSelect');
+    const songId = $('songId');
+    if (platform) platform.value = item.source || '';
     renderQualityOptions();
-    if (item.qualities?.length) {
-      const preferred = item.qualities.find((q) => q === '128k') || item.qualities[0];
-      $('qualitySelect').value = preferred;
+    if ($('qualitySelect')) {
+      $('qualitySelect').value = item.qualities?.includes('320k') ? '320k' : (item.qualities?.[0] || '128k');
     }
-    $('songId').value = item.id || '';
+    if (songId) songId.value = item.id || '';
     $('nowPlaying').textContent = `${item.name || '未知歌曲'} · ${item.artist || item.singer || '未知歌手'}`;
-    $('resolveButton').click();
+    $('resolveButton')?.click();
     document.querySelector('.player-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   async function resolveWithAmmo(ammo, platform, id, quality, musicInfo) {
     const url = endpoint(ammo.baseUrl, ammo.endpoints.resolve);
     const started = performance.now();
-    const response = await fetch(url, {
+    const data = await fetchJsonWithRetry(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source: platform, id, quality, musicInfo: musicInfo || null }),
       cache: 'no-store',
     });
     const elapsed = Math.round(performance.now() - started);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
     if (!data?.ok || !data.url) throw new Error(data?.message || '未返回可播放 URL');
     return { data, elapsed };
   }
 
   async function resolveSong() {
-    const ammo = selectedAmmo().length ? selectedAmmo() : state.ammo;
-    const platform = $('platformSelect').value;
-    const id = $('songId').value.trim();
-    const quality = $('qualitySelect').value;
+    const ammo = selectedAmmo();
+    const platform = $('platformSelect')?.value;
+    const id = $('songId')?.value.trim();
+    const quality = $('qualitySelect')?.value;
     if (!ammo.length) return showNotice('resolveNotice', '还没有装载任何弹药源。', 'error');
     if (!platform || !id || !quality) return showNotice('resolveNotice', '请先选择平台、歌曲 ID 和音质。', 'error');
+
     state.busy = true;
     hideNotice('resolveNotice');
     console.groupCollapsed(`[LX Web Shell] 解析 ${platform} / ${quality} / ${id}`);
@@ -302,7 +327,7 @@
           $('audio').load();
           $('qualityBadge').textContent = quality;
           $('httpWarning').classList.toggle('hidden', !result.data.url.startsWith('http://'));
-          renderMetadata(result.data.metadata || null, result.data.url);
+          renderMetadata(result.data.metadata || null);
           $('nowPlaying').textContent = result.data.metadata?.title || `平台 ${platform} · ${id}`;
           return;
         } catch (error) {
@@ -316,8 +341,9 @@
     }
   }
 
-  function renderMetadata(meta, url) {
+  function renderMetadata(meta) {
     const box = $('metadata');
+    if (!box) return;
     if (!meta || typeof meta !== 'object') {
       box.className = 'metadata hidden';
       box.innerHTML = '';
@@ -333,26 +359,40 @@
   }
 
   async function search() {
-    const keyword = $('keyword').value.trim();
-    const selected = selectedAmmo();
+    const keyword = $('keyword')?.value.trim();
+    const selected = $('ammoSelect')?.value;
     if (!keyword) return showNotice('searchNotice', '请输入搜索关键词。', 'error');
-    if (!selected.length) return showNotice('searchNotice', '请选择一个搜索源；默认不启用聚合搜索。', 'error');
+    if (!selected) return showNotice('searchNotice', '请选择搜索平台；默认不启用搜索。', 'error');
+
     hideNotice('searchNotice');
     $('searchButton').disabled = true;
     $('searchButton').textContent = '搜索中…';
     $('searchResults').innerHTML = '<div class="empty">正在搜索…</div>';
     const started = performance.now();
+
     try {
-      const aggregate = $('ammoSelect').value === '__all__';
-      const result = aggregate ? await aggregateSearch(selected, keyword) : await ammoSearch(selected[0], keyword);
-      const results = aggregate ? result.results : result.results.map((r) => ({ ...r, __ammo: selected[0] }));
-      state.activeResults = dedupeResults(results);
-      state.activeQuery = keyword;
-      renderResults(state.activeResults, aggregate ? result.errors : []);
-      showNotice('searchNotice', `找到 ${state.activeResults.length} 条结果 · ${Math.round(performance.now() - started)} ms`, 'success');
+      let result;
+      if (selected === '__all__') {
+        const platforms = Object.keys(PLATFORM_NAMES);
+        const settled = await Promise.allSettled(platforms.map((platform) => searchPlatform(platform, keyword)));
+        const results = [];
+        const errors = [];
+        settled.forEach((item, index) => {
+          const platform = platforms[index];
+          if (item.status === 'fulfilled') results.push(...item.value.results);
+          else errors.push(`${PLATFORM_NAMES[platform]}: ${item.reason?.message || item.reason}`);
+        });
+        result = { results, errors };
+      } else {
+        result = await searchPlatform(selected, keyword);
+      }
+      state.activeResults = dedupeResults(result.results || []);
+      renderResults(state.activeResults, result.errors || []);
+      showNotice('searchNotice', `找到 ${state.activeResults.length} 条结果 · ${Math.round(performance.now() - started)} ms`, result.errors?.length ? 'warning' : 'success');
     } catch (error) {
       showNotice('searchNotice', error.message || '搜索失败', 'error');
       $('searchResults').innerHTML = '';
+      console.error('[LX Web Shell] 搜索失败', error);
     } finally {
       $('searchButton').disabled = false;
       $('searchButton').textContent = '搜索';
@@ -362,7 +402,10 @@
   async function loadAmmoFromDialog() {
     const input = $('manifestUrl');
     const url = input.value.trim();
-    if (!url) return;
+    if (!url) {
+      showNotice('loaderNotice', 'Manifest URL 不能为空。', 'error');
+      return;
+    }
     $('loadAmmoButton').disabled = true;
     try {
       const manifest = await fetchManifest(url);
@@ -376,27 +419,40 @@
     }
   }
 
+  function closeSettings() {
+    $('settingsDialog')?.close();
+  }
+
   function wireEvents() {
-    $('settingsButton').addEventListener('click', () => $('settingsDialog').showModal());
-    $('loadAmmoButton').addEventListener('click', loadAmmoFromDialog);
-    $('clearAmmoButton').addEventListener('click', () => {
+    $('settingsButton')?.addEventListener('click', () => $('settingsDialog')?.showModal());
+    $('closeSettingsButton')?.addEventListener('click', closeSettings);
+    $('loadAmmoButton')?.addEventListener('click', loadAmmoFromDialog);
+    $('clearAmmoButton')?.addEventListener('click', () => {
       state.ammo = [];
       saveAmmo();
-      renderAmmo(); renderAmmoSelect(); renderPlatformOptions();
+      renderAmmo();
+      renderPlatformOptions();
       showNotice('loaderNotice', '已清空本地弹药。', 'success');
     });
-    $('searchButton').addEventListener('click', search);
-    $('keyword').addEventListener('keydown', (event) => { if (event.key === 'Enter') search(); });
-    $('platformSelect').addEventListener('change', renderQualityOptions);
-    $('resolveButton').addEventListener('click', resolveSong);
+    $('searchButton')?.addEventListener('click', search);
+    $('keyword')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') search(); });
+    $('platformSelect')?.addEventListener('change', renderQualityOptions);
+    $('resolveButton')?.addEventListener('click', resolveSong);
+    $('settingsDialog')?.addEventListener('click', (event) => {
+      if (event.target === $('settingsDialog')) closeSettings();
+    });
   }
 
   function init() {
+    renderSearchSourceOptions();
     renderAmmo();
-    renderAmmoSelect();
     renderPlatformOptions();
     wireEvents();
-    log('初始化', { ammo: state.ammo.map((a) => ({ id: a.id, name: a.name })) });
+    log('初始化', {
+      ammo: state.ammo.map((a) => ({ id: a.id, name: a.name })),
+      searchApi: SEARCH_API_URL,
+      retries: DEFAULT_RETRIES,
+    });
   }
 
   init();
