@@ -48,6 +48,48 @@
         <div id="searchResults" class="results"></div>
       </section>
 
+      <section class="card link-card">
+        <div class="section-head">
+          <div>
+            <h2>🔗 链接识别</h2>
+            <p>直接粘贴歌曲或歌单链接；页面会先识别平台与资源类型，再进入对应流程。</p>
+          </div>
+        </div>
+        <div class="search-row">
+          <input id="linkInput" type="url" maxlength="2000"
+                 placeholder="粘贴音乐歌曲/歌单链接，例如 https://..."
+                 autocomplete="off">
+          <button id="recognizeLinkButton" type="button" class="primary-button">识别链接</button>
+        </div>
+        <div id="linkNotice" class="notice hidden"></div>
+      </section>
+
+      <section class="card playlist-card">
+        <div class="section-head">
+          <div>
+            <h2>📚 打开歌单</h2>
+            <p>可粘贴歌单 URL 或 ID；六个平台入口由统一的歌单接口负责，百度音乐目前标记为实验性适配。</p>
+          </div>
+        </div>
+        <div class="search-row">
+          <select id="playlistPlatform">
+            <option value="">请选择平台</option>
+            <option value="wy">网易云音乐</option>
+            <option value="tx">腾讯音乐</option>
+            <option value="kg">酷狗音乐</option>
+            <option value="kw">酷我音乐</option>
+            <option value="mg">咪咕音乐</option>
+            <option value="bd">百度音乐（实验性）</option>
+          </select>
+          <input id="playlistInput" type="text" maxlength="2000"
+                 placeholder="歌单链接或歌单 ID" autocomplete="off">
+          <button id="openPlaylistButton" type="button" class="primary-button">打开歌单</button>
+        </div>
+        <div id="playlistNotice" class="notice hidden"></div>
+        <div id="playlistSummary" class="playlist-summary hidden"></div>
+        <div id="playlistResults" class="results"></div>
+      </section>
+
       <section class="card player-card">
         <div class="section-head compact">
           <div>
@@ -114,5 +156,6 @@
   </dialog>
 
   <script src="app.js" defer></script>
+  <script src="features.js" defer></script>
 </body>
 </html>
