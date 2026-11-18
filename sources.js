@@ -537,18 +537,24 @@
       }
       for (const leg of attempts) {
         if (leg === 'gd') {
+          // High bitrate first, stepping down when the source has no such
+          // quality for this track (joox often lacks hires).
           const brMap = { '128k': 128, '192k': 192, '320k': 320, flac: 740, flac24bit: 999 };
-          try {
-            const result = await window.LX_CLIENT_API.gdUrl(
-              options.gd.gdSource,
-              options.gd.id || id,
-              brMap[quality] || 320,
-            );
-            console.log(`✅ [Ammo] GD Studio(${options.gd.gdSource}) 解析成功`, result);
-            return { ...result, source: `GD Studio · ${options.gd.gdSource}` };
-          } catch (error) {
-            console.warn(`❌ [Ammo] GD Studio(${options.gd.gdSource}): ${error.message || error}`);
-            errors.push(`GD Studio: ${error.message || error}`);
+          const brSteps = [999, 740, 320, 192, 128];
+          const startIdx = Math.max(0, brSteps.indexOf(brMap[quality] || 320));
+          for (const br of brSteps.slice(startIdx)) {
+            try {
+              const result = await window.LX_CLIENT_API.gdUrl(
+                options.gd.gdSource,
+                options.gd.id || id,
+                br,
+              );
+              console.log(`%c[LX ammo] ✅ GD Studio(${options.gd.gdSource}) br=${br} 解析成功`, 'color:#7aa2ff', result.url?.slice(0, 80));
+              return { ...result, source: `GD Studio · ${options.gd.gdSource} · ${br >= 999 ? 'hires' : br >= 740 ? 'flac' : br + 'k'}` };
+            } catch (error) {
+              console.warn(`%c[LX ammo] ❌ GD Studio(${options.gd.gdSource}) br=${br}: ${error.message || error}`, 'color:#e0af68');
+              errors.push(`GD Studio br=${br}: ${error.message || error}`);
+            }
           }
           continue;
         }
