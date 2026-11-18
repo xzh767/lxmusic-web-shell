@@ -164,6 +164,8 @@ lxmusic-web-shell/
 └── docs/
     ├── AMMO_API.md
     ├── AMMO_STANDARD.md
+    ├── GATEWAY_API.md
+    ├── FRONTEND_ARCHITECTURE.md
     ├── LX_SOURCE_PORTING_EXAMPLE.md
     └── examples/lx-gateway-source.js
 ```
@@ -228,6 +230,8 @@ GET  /api/playlist
 
 完整标准：[`docs/AMMO_STANDARD.md`](docs/AMMO_STANDARD.md)
 精简 API：[`docs/AMMO_API.md`](docs/AMMO_API.md)
+演示网关接口：[`docs/GATEWAY_API.md`](docs/GATEWAY_API.md)
+前端架构：[`docs/FRONTEND_ARCHITECTURE.md`](docs/FRONTEND_ARCHITECTURE.md)
 
 ## 与 LX Music Desktop 音源的关系
 
