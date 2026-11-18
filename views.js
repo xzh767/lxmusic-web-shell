@@ -448,7 +448,12 @@
 
   function wireEvents() {
     document.querySelectorAll('.nav-item').forEach((button) => {
-      button.addEventListener('click', () => A.switchView(button.dataset.view));
+      button.addEventListener('click', () => {
+        A.switchView(button.dataset.view);
+        // Keep the ammo list fresh when entering the sources view: ammo may
+        // have been loaded programmatically (not through the UI buttons).
+        if (button.dataset.view === 'sources') renderAmmoList();
+      });
     });
 
     document.querySelectorAll('.tab').forEach((button) => {
