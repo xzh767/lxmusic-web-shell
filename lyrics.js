@@ -47,18 +47,20 @@
   /**
    * Lyrics come from the browser first (client-api.js). The gateway lyric API
    * is the fallback for platforms the browser cannot reach.
+   * gdSource: GD Studio source name carried from search results (_gd.gdSource).
    */
-  async function fetchLyric(source, id) {
+  async function fetchLyric(source, id, gdSource) {
     const client = window.LX_CLIENT_API;
     if (client) {
       try {
-        const result = await client.lyric(source, id);
+        const result = await client.lyric(source, id, gdSource);
         if (result?.lyric) return result.lyric;
       } catch (error) {
-        console.warn('[歌词] 客户端来源失败，改用网关', error);
+        console.warn(`%c[LX lyric] 客户端来源全部失败 → 网关兜底`, 'color:#e0af68', { platform: source, id, errors: error.message });
       }
     }
     const url = `${LYRIC_API}${LYRIC_API.includes('?') ? '&' : '?'}source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`;
+    console.log(`%c[LX lyric] GET 网关 ${source}/${id}`, 'color:#89ddff');
     const response = await fetch(url, { cache: 'no-store' });
     const data = await response.json().catch(() => null);
     if (!data?.ok) throw new Error(data?.message || '歌词暂不可用');
@@ -131,7 +133,7 @@
    * Load lyrics for the given song; source/id come from the app layer.
    * autoOpen=false keeps the panel closed (used when a track starts playing).
    */
-  async function load(source, id, title, autoOpen = true) {
+  async function load(source, id, title, autoOpen = true, gdSource) {
     const key = `${source}:${id}`;
     if (key === state.currentSongKey) {
       if (autoOpen) open();
@@ -143,8 +145,9 @@
     if (autoOpen) open();
     render([], title || '加载中…');
     try {
-      const raw = await fetchLyric(source, id);
+      const raw = await fetchLyric(source, id, gdSource);
       state.lines = parseLrc(raw);
+      console.log(`%c[LX lyric] 解析出 ${state.lines.length} 行`, 'color:#e0af68');
       render(state.lines, title);
     } catch (error) {
       console.warn('[歌词] 读取失败', error);

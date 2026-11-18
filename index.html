@@ -4,55 +4,65 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="LX Music Web Shell — a source-agnostic music search and playback frontend with pluggable resolver backends.">
-  <meta name="theme-color" content="#0b1220">
+  <meta name="theme-color" content="#131313">
   <title>LX Music Web Shell</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🎵%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app">
-    <!-- 侧栏导航 -->
-    <aside class="sidebar" id="sidebar">
-      <div class="brand">
-        <div class="brand-logo">🎵</div>
-        <div class="brand-copy">
-          <strong>LX Music</strong>
-          <span>Web Shell</span>
-        </div>
-      </div>
+    <header class="toolbar">
+      <span class="logo">L X</span>
+      <span class="spacer"></span>
+      <select id="ammoSelect" aria-label="搜索平台">
+        <option value="">请选择搜索平台</option>
+        <option value="__all__">聚合搜索</option>
+        <option value="wy">网易云</option>
+        <option value="tx">QQ音乐</option>
+        <option value="kg">酷狗</option>
+        <option value="kw">酷我</option>
+        <option value="mg">咪咕</option>
+        <option value="joox">JOOX</option>
+      </select>
+    </header>
+
+    <aside class="aside">
       <nav class="nav" id="nav">
-        <button class="nav-item active" data-view="search">🔎<span>搜索</span></button>
-        <button class="nav-item" data-view="queue">📃<span>队列<small id="queueBadge" class="badge hidden"></small></span></button>
-        <button class="nav-item" data-view="favorites">⭐<span>收藏<small id="favBadge" class="badge hidden"></small></span></button>
-        <button class="nav-item" data-view="playlists">📚<span>歌单</span></button>
-        <button class="nav-item" data-view="sources">🔫<span>源管理<small id="ammoBadge" class="badge hidden"></small></span></button>
+        <button class="nav-item active" data-view="search" title="搜索" aria-label="搜索">
+          <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          <small class="badge hidden" id="searchBadge"></small>
+        </button>
+        <button class="nav-item" data-view="queue" title="播放队列" aria-label="播放队列">
+          <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+          <small class="badge hidden" id="queueBadge"></small>
+        </button>
+        <button class="nav-item" data-view="favorites" title="我的收藏" aria-label="我的收藏">
+          <svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+          <small class="badge hidden" id="favBadge"></small>
+        </button>
+        <button class="nav-item" data-view="playlists" title="歌单" aria-label="歌单">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4zm12 0v6l5-3z"/></svg>
+        </button>
+        <button class="nav-item" data-view="sources" title="源管理" aria-label="源管理">
+          <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zM4 6h16v2H4z"/></svg>
+          <small class="badge hidden" id="ammoBadge"></small>
+        </button>
       </nav>
-      <div class="sidebar-foot">
-        <div class="mode-pill"><span class="status-dot"></span><span>枪弹分离 · 不代理音频</span></div>
+      <div class="aside-foot">
+        <button class="theme-btn" id="themeButton" title="主题" aria-label="切换主题">🎨</button>
       </div>
     </aside>
 
-    <!-- 主内容区 -->
     <main class="main" id="main">
-      <!-- 搜索视图 -->
       <section class="view active" data-view="search">
         <div class="card">
           <div class="section-head">
             <div>
-              <h2>🔎 搜索音乐</h2>
-              <p>搜索由网关搜索服务处理；默认不替你选择平台。</p>
+              <h2>搜索</h2>
+              <p>浏览器直连各平台公开接口，失败时自动走网关兜底。</p>
             </div>
           </div>
           <div class="search-row">
-            <select id="ammoSelect">
-              <option value="">请选择搜索平台</option>
-              <option value="__all__">聚合搜索（全部平台）</option>
-              <option value="wy">网易云音乐</option>
-              <option value="tx">腾讯音乐</option>
-              <option value="kg">酷狗音乐</option>
-              <option value="kw">酷我音乐</option>
-              <option value="mg">咪咕音乐</option>
-            </select>
             <input id="keyword" type="search" maxlength="120" placeholder="歌曲、歌手或关键词" autocomplete="off">
             <button id="searchButton" type="button" class="primary-button">搜索</button>
           </div>
@@ -66,12 +76,11 @@
         </div>
       </section>
 
-      <!-- 队列视图 -->
       <section class="view" data-view="queue">
         <div class="card">
           <div class="section-head">
             <div>
-              <h2>📃 播放队列</h2>
+              <h2>播放队列</h2>
               <p id="queueSummary">队列保存在浏览器本地。</p>
             </div>
             <div class="head-actions">
@@ -82,12 +91,11 @@
         </div>
       </section>
 
-      <!-- 收藏视图 -->
       <section class="view" data-view="favorites">
         <div class="card">
           <div class="section-head">
             <div>
-              <h2>⭐ 我的收藏</h2>
+              <h2>我的收藏</h2>
               <p>收藏保存在浏览器 localStorage，可导出 JSON 备份。</p>
             </div>
             <div class="head-actions">
@@ -101,13 +109,12 @@
         </div>
       </section>
 
-      <!-- 歌单视图 -->
       <section class="view" data-view="playlists">
         <div class="card">
           <div class="section-head">
             <div>
-              <h2>📚 打开歌单</h2>
-              <p>粘贴歌单链接或选择平台 + 歌单 ID；由网关归一化为播放列表。</p>
+              <h2>歌单</h2>
+              <p>粘贴歌单链接自动识别平台；或选择平台后填歌单 ID。</p>
             </div>
           </div>
           <div class="search-row">
@@ -120,7 +127,7 @@
               <option value="mg">咪咕音乐</option>
             </select>
             <input id="playlistInput" type="text" maxlength="2000" placeholder="歌单链接或歌单 ID" autocomplete="off">
-            <button id="openPlaylistButton" type="button" class="primary-button">打开歌单</button>
+            <button id="openPlaylistButton" type="button" class="primary-button">打开</button>
           </div>
           <div id="playlistNotice" class="notice hidden"></div>
           <div id="playlistSummary" class="playlist-summary hidden"></div>
@@ -129,58 +136,55 @@
         <div class="card">
           <div class="section-head compact">
             <div>
-              <h2>💾 已保存的歌单</h2>
-              <p>收藏的歌单保存在浏览器本地。</p>
+              <h2>已保存的歌单</h2>
             </div>
           </div>
           <div id="savedPlaylists" class="saved-playlists"></div>
         </div>
       </section>
 
-      <!-- 源管理视图 -->
       <section class="view" data-view="sources">
         <div class="card">
           <div class="section-head">
             <div>
-              <h2>🔫 源管理（装弹）</h2>
-              <p>三种弹药：Manifest Ammo（推荐）、LX 音源脚本（浏览器沙箱）、通用 HTTP 端点。</p>
+              <h2>源管理（装弹）</h2>
+              <p>三种弹药：Manifest Ammo、LX 音源脚本（浏览器沙箱）、通用 HTTP 端点。</p>
             </div>
           </div>
           <div class="source-tabs">
-            <button class="tab active" data-tab="manifest">Manifest Ammo</button>
-            <button class="tab" data-tab="lxjs">LX 音源脚本</button>
-            <button class="tab" data-tab="http">通用 HTTP</button>
+            <button class="tab active" data-tab="manifest">Manifest</button>
+            <button class="tab" data-tab="lxjs">LX 脚本</button>
+            <button class="tab" data-tab="http">HTTP</button>
           </div>
           <div class="tab-panel active" data-tab="manifest">
             <label for="manifestUrl">Manifest URL</label>
-            <div class="search-row">
-              <input id="manifestUrl" type="url" placeholder="https://example.com/manifest.json" autocomplete="url">
+            <input id="manifestUrl" type="url" placeholder="https://example.com/manifest.json" autocomplete="url">
+            <div class="search-row" style="margin-top:8px;">
               <button id="loadAmmoButton" type="button" class="primary-button">装载</button>
             </div>
             <p class="hint">示例：https://music-ammo-api-gateway.xlz767.dpdns.org/manifest.json</p>
           </div>
           <div class="tab-panel" data-tab="lxjs">
             <label for="lxSourceFile">选择 LX 音源脚本（.js）</label>
-            <div class="search-row">
-              <input id="lxSourceFile" type="file" accept=".js,text/javascript">
-              <button id="lxLoadButton" type="button" class="primary-button">装载脚本</button>
-            </div>
+            <input id="lxSourceFile" type="file" accept=".js,text/javascript">
             <label for="lxSourceUrl">或脚本 URL</label>
-            <div class="search-row">
-              <input id="lxSourceUrl" type="url" placeholder="https://example.com/source.js" autocomplete="url">
+            <input id="lxSourceUrl" type="url" placeholder="https://example.com/source.js" autocomplete="url">
+            <div class="search-row" style="margin-top:8px;">
+              <button id="lxLoadButton" type="button" class="primary-button">装载文件</button>
               <button id="lxLoadUrlButton" type="button" class="ghost-button">从 URL 装载</button>
             </div>
-            <p class="hint warn">⚠️ LX 脚本直连上游，上游无 CORS 头时浏览器会拦截；稳定方案仍是 Manifest Ammo。脚本仅在本机沙箱运行，不上传。</p>
+            <p class="hint warn">⚠️ LX 脚本直连上游，上游无 CORS 头时浏览器会拦截；脚本仅在本机沙箱运行，不上传。</p>
           </div>
           <div class="tab-panel" data-tab="http">
             <label for="httpBaseUrl">Base URL</label>
             <input id="httpBaseUrl" type="url" placeholder="https://example.com">
             <label for="httpResolvePath">Resolve 路径（POST JSON {source,id,quality}）</label>
             <input id="httpResolvePath" type="text" placeholder="/api/resolve">
-            <label for="httpSearchPath">Search 路径（可选，GET ?q=&source=&page=&limit=）</label>
+            <label for="httpSearchPath">Search 路径（可选）</label>
             <input id="httpSearchPath" type="text" placeholder="/api/search">
-            <div class="search-row">
-              <input id="httpName" type="text" placeholder="显示名称（可选）">
+            <label for="httpName">显示名称（可选）</label>
+            <input id="httpName" type="text" placeholder="My Ammo">
+            <div class="search-row" style="margin-top:8px;">
               <button id="httpLoadButton" type="button" class="primary-button">装载</button>
             </div>
           </div>
@@ -189,7 +193,7 @@
         <div class="card">
           <div class="section-head compact">
             <div>
-              <h2>📦 已装载弹药</h2>
+              <h2>已装载弹药</h2>
               <p>按顺序回退：A → 失败 → B → 成功。可临时停用单个弹药。</p>
             </div>
             <div class="head-actions">
@@ -202,7 +206,6 @@
       </section>
     </main>
 
-    <!-- 播放栏 -->
     <footer class="playerbar" id="playerbar">
       <div class="pb-left">
         <div class="pb-cover" id="pbCover">🎵</div>
@@ -233,9 +236,31 @@
       </div>
       <audio id="audio" preload="metadata"></audio>
     </footer>
+
+    <nav class="tabbar" id="tabbar">
+      <button class="nav-item active" data-view="search" aria-label="搜索">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <span>搜索</span>
+      </button>
+      <button class="nav-item" data-view="queue" aria-label="队列">
+        <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+        <span>队列</span>
+      </button>
+      <button class="nav-item" data-view="favorites" aria-label="收藏">
+        <svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+        <span>收藏</span>
+      </button>
+      <button class="nav-item" data-view="playlists" aria-label="歌单">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4zm12 0v6l5-3z"/></svg>
+        <span>歌单</span>
+      </button>
+      <button class="nav-item" data-view="sources" aria-label="源管理">
+        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10z"/></svg>
+        <span>源</span>
+      </button>
+    </nav>
   </div>
 
-  <!-- 歌词面板 -->
   <div id="lyricsPanel" class="lyrics-panel hidden" aria-hidden="true">
     <div class="lyrics-head">
       <strong id="lyricsTitle">歌词</strong>
@@ -244,15 +269,16 @@
     <div id="lyricsContent" class="lyrics-content"></div>
   </div>
 
-  <!-- 混合内容警告 -->
+  <div id="themeMenu" class="theme-menu hidden"></div>
+
   <div id="httpWarning" class="toast warn hidden">
     <strong>⚠️ 返回的是 HTTP 直链</strong>
     <span>浏览器可能因混合内容策略拒绝播放。本项目不代理音频流。</span>
   </div>
 
-  <!-- Toast -->
   <div id="toastBox" class="toast-box"></div>
 
+  <script src="theme.js" defer></script>
   <script src="client-api.js" defer></script>
   <script src="sources.js" defer></script>
   <script src="lyrics.js" defer></script>

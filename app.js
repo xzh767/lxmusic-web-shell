@@ -8,15 +8,16 @@
   'use strict';
 
   const PLATFORM_NAMES = {
-    wy: '网易云音乐',
-    tx: '腾讯音乐',
-    kg: '酷狗音乐',
-    kw: '酷我音乐',
-    mg: '咪咕音乐',
-    bd: '百度音乐',
+    wy: '网易云',
+    tx: 'QQ',
+    kg: '酷狗',
+    kw: '酷我',
+    mg: '咪咕',
+    bd: '百度',
+    joox: 'JOOX',
   };
-  const QUALITY_ORDER = ['128k', '320k', 'flac', 'flac24bit'];
-  const QUALITY_LABELS = { '128k': '128k', '320k': '320k', flac: 'FLAC', flac24bit: 'FLAC 24bit' };
+  const QUALITY_ORDER = ['128k', '192k', '320k', 'flac', 'flac24bit'];
+  const QUALITY_LABELS = { '128k': '128k', '192k': '192k', '320k': '320k', flac: 'FLAC', flac24bit: 'Hires' };
   const PLAY_MODES = [
     { id: 'list', icon: '🔁', label: '列表循环' },
     { id: 'single', icon: '🔂', label: '单曲循环' },
@@ -32,6 +33,46 @@
 
   const $ = (id) => document.getElementById(id);
   const esc = (v) => (window.LX_AMMO ? window.LX_AMMO.esc(v) : String(v ?? ''));
+
+  /* ---------------- debug log ---------------- */
+
+  // 环形缓冲，保存最近 300 条调试事件；window.LX_DEBUG.dump() 可导出全部。
+  const dbgBuffer = [];
+  const DBG_ENABLED = true;
+
+  function dbg(tag, message, data) {
+    const entry = {
+      t: new Date().toISOString().slice(11, 23),
+      tag,
+      message,
+      data: data === undefined ? null : data,
+    };
+    dbgBuffer.push(entry);
+    if (dbgBuffer.length > 300) dbgBuffer.shift();
+    if (!DBG_ENABLED) return;
+    const style = {
+      play: 'color:#7aa2ff;font-weight:bold',
+      search: 'color:#7fd6a0;font-weight:bold',
+      lyric: 'color:#e0af68;font-weight:bold',
+      source: 'color:#c792ea;font-weight:bold',
+      net: 'color:#89ddff',
+      err: 'color:#ff5d73;font-weight:bold',
+      cache: 'color:#9aa0b0',
+    }[tag] || 'color:#a0a8b8';
+    if (data !== undefined) {
+      console.log(`%c[LX ${tag}] ${message}`, style, data);
+    } else {
+      console.log(`%c[LX ${tag}] ${message}`, style);
+    }
+  }
+
+  window.LX_DEBUG = {
+    dump: () => dbgBuffer.slice(),
+    print: () => console.table(dbgBuffer.slice(-80)),
+    clear: () => { dbgBuffer.length = 0; console.log('[LX debug] 已清空'); },
+    state: () => state,
+    get buffer() { return dbgBuffer.length; },
+  };
 
   const state = {
     view: 'search',
@@ -143,6 +184,7 @@
       strMediaMid: raw.strMediaMid || '',
       songId: raw.songId ?? null,
       qualities: Array.isArray(raw.qualities) ? raw.qualities : [],
+      _gd: raw._gd || null,
     };
   }
 
@@ -157,6 +199,9 @@
 
   async function playSong(song, options = {}) {
     if (!song) return;
+    const t0 = performance.now();
+    dbg('play', `▶ 开始播放: ${song.name} · ${PLATFORM_NAMES[song.source] || song.source} (${song.source})`, { id: song.id, quality: state.lastQuality, hasGd: !!song._gd });
+
     state.current = song;
     state.lastQuality = pickQuality(song);
     updatePlayerBar(song);
@@ -165,6 +210,8 @@
     const registry = window.LX_AMMO?.registry;
     if (!registry) return;
     try {
+      // GD Studio 元数据的歌可以直接在浏览器里解析，不必经过任何服务器。
+      const gdMeta = song._gd ? { gdSource: song._gd.gdSource, id: song._gd.gdId || song.id } : null;
       const result = await registry.resolveWithFallback(
         song.source,
         song.id,
@@ -182,13 +229,15 @@
           copyrightId: song.id,
           type: state.lastQuality,
         },
+        gdMeta ? { gd: gdMeta } : {},
       );
+      dbg('play', `✅ 解析成功 via ${result.source}`, { url: result.url?.slice(0, 100), ms: Math.round(performance.now() - t0) });
       state.currentUrl = result.url;
       const audio = $('audio');
       audio.src = result.url;
       audio.volume = state.volume;
       audio.play().catch((error) => {
-        console.warn('[播放] 自动播放被阻止', error);
+        dbg('play', '⚠️ 自动播放被浏览器拦截，等待用户手动播放', { error: String(error) });
         toast('浏览器阻止了自动播放，点击 ▶ 手动播放', 'warn');
       });
       $('httpWarning').classList.toggle('hidden', !result.url.startsWith('http://'));
@@ -197,7 +246,7 @@
       showNotice('searchNotice', `✅ ${song.name} · 来自 ${result.source}`, 'success');
       if (window.LX_LYRICS) {
         // Load lyrics in the background; the panel only opens on user request.
-        window.LX_LYRICS.load(song.source, song.id, `${song.name} · ${song.artist}`, false).catch(() => {});
+        window.LX_LYRICS.load(song.source, song.id, `${song.name} · ${song.artist}`, false, song._gd?.gdSource).catch(() => {});
       }
       updateMediaSession(song);
       if (options.queue && !options.fromQueue) {
@@ -207,9 +256,10 @@
         renderQueue();
       }
     } catch (error) {
+      dbg('play', `❌ 解析失败`, { error: error.message, details: error.details });
       console.error('[播放] 解析失败', error);
       showNotice('searchNotice', `解析失败：${error.message || error}`, 'error');
-      toast('解析失败，已尝试所有弹药源', 'err');
+      toast('解析失败，已尝试所有途径', 'err');
     }
   }
 
@@ -458,7 +508,8 @@
     document.querySelectorAll('.view').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === view);
     });
-    document.querySelectorAll('.nav-item').forEach((el) => {
+    // Both desktop rail and mobile tab bar use .nav-item[data-view].
+    document.querySelectorAll('.nav-item[data-view]').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === view);
     });
     $('main').scrollTop = 0;

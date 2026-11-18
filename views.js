@@ -78,6 +78,7 @@
     if (!keyword) return showNotice('searchNotice', '请输入搜索关键词。', 'error');
     if (!platform) return showNotice('searchNotice', '请选择搜索平台；默认不启用搜索。', 'error');
 
+    console.log(`%c[LX search] 开始: "${keyword}" 平台=${platform} 页=${page}`, 'color:#7fd6a0;font-weight:bold');
     A.state.keyword = keyword;
     A.state.platform = platform;
     A.state.page = page;
@@ -97,13 +98,18 @@
         );
         settled.forEach((item, index) => {
           if (item.status === 'fulfilled') {
+            console.log(`%c[LX search] ${PLATFORM_ORDER[index]}: ${item.value.results.length} 条 via ${item.value.via || '无'}`, 'color:#7fd6a0', item.value.errors?.length ? { errors: item.value.errors } : undefined);
             results.push(...item.value.results);
             errors.push(...(item.value.errors || []));
             if (!via && item.value.via) via = item.value.via;
-          } else errors.push(`${A.PLATFORM_NAMES[PLATFORM_ORDER[index]]}: ${item.reason?.message || item.reason}`);
+          } else {
+            console.warn(`%c[LX search] ${PLATFORM_ORDER[index]}: 整体失败`, 'color:#ff5d73', item.reason);
+            errors.push(`${A.PLATFORM_NAMES[PLATFORM_ORDER[index]]}: ${item.reason?.message || item.reason}`);
+          }
         });
       } else {
         const result = await searchPlatform(platform, keyword, page);
+        console.log(`%c[LX search] ${platform}: ${result.results.length} 条 via ${result.via || '无'}`, 'color:#7fd6a0', result.errors?.length ? { errors: result.errors } : undefined);
         results = result.results;
         errors = result.errors;
         via = result.via;
@@ -447,14 +453,44 @@
   /* ---------------- wiring ---------------- */
 
   function wireEvents() {
-    document.querySelectorAll('.nav-item').forEach((button) => {
+    // Both the desktop icon rail and the mobile bottom tabs share .nav-item.
+    document.querySelectorAll('.nav-item[data-view]').forEach((button) => {
       button.addEventListener('click', () => {
         A.switchView(button.dataset.view);
-        // Keep the ammo list fresh when entering the sources view: ammo may
-        // have been loaded programmatically (not through the UI buttons).
         if (button.dataset.view === 'sources') renderAmmoList();
       });
     });
+
+    // Theme picker
+    const themeMenu = $('themeMenu');
+    const themeButton = $('themeButton');
+    if (themeMenu && themeButton) {
+      const renderMenu = () => {
+        const current = window.LX_THEME?.current?.id;
+        themeMenu.innerHTML = (window.LX_THEME?.THEMES || []).map((theme) => `
+          <button type="button" data-theme-id="${theme.id}" class="${theme.id === current ? 'current' : ''}">
+            <span class="swatch" style="background:${theme.isDark ? '#333' : theme.primary}"></span>${theme.name}
+          </button>`).join('');
+        themeMenu.querySelectorAll('[data-theme-id]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const theme = window.LX_THEME.applyTheme(button.dataset.themeId);
+            renderMenu();
+            console.log(`%c[LX theme] 已切换到「${theme.name}」`, 'color:#c792ea;font-weight:bold');
+          });
+        });
+      };
+      renderMenu();
+      themeButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        themeMenu.classList.toggle('hidden');
+        renderMenu();
+      });
+      document.addEventListener('click', (event) => {
+        if (!themeMenu.classList.contains('hidden') && !themeMenu.contains(event.target)) {
+          themeMenu.classList.add('hidden');
+        }
+      });
+    }
 
     document.querySelectorAll('.tab').forEach((button) => {
       button.addEventListener('click', () => {
@@ -535,7 +571,7 @@
         return;
       }
       if (A.state.current) {
-        panel.load(A.state.current.source, A.state.current.id, `${A.state.current.name} · ${A.state.current.artist}`);
+        panel.load(A.state.current.source, A.state.current.id, `${A.state.current.name} · ${A.state.current.artist}`, true, A.state.current._gd?.gdSource);
       } else {
         toast('还没有播放歌曲', 'warn');
       }
@@ -559,7 +595,7 @@
     audio.addEventListener('pause', A.syncPlayButton);
     audio.addEventListener('ended', () => A.nextSong(true));
     audio.addEventListener('error', () => {
-      console.warn('[播放] audio 元素加载失败', A.state.currentUrl);
+      console.warn(`%c[LX play] audio 元素加载失败`, 'color:#ff5d73;font-weight:bold', { src: A.state.currentUrl.slice(0, 120), readyState: audio.readyState, networkState: audio.networkState, errorCode: audio.error?.code, errorMessage: audio.error?.message });
       toast('音频加载失败，尝试下一首', 'err');
       if (A.state.queue.length > 1) A.nextSong(true);
     });

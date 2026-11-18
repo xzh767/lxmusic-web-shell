@@ -166,12 +166,71 @@
     })).filter((item) => item.id);
   }
 
+  /**
+   * GD Studio 聚合源 — music-api.gdstudio.xyz
+   *
+   * 公益 API、CORS 全开、海外可达。netease（真网易镜像）和 joox 两个源
+   * 直连可用，是 CORS 受限平台（wy）的主力浏览器直连来源。
+   */
+  async function searchGd(source, keyword, page, limit) {
+    const url = `https://music-api.gdstudio.xyz/api.php?types=search&source=${source}&name=${encodeURIComponent(keyword)}&count=${limit}&pages=${page}`;
+    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!Array.isArray(data)) throw new Error('GD 源返回格式异常');
+    return data.map((item) => ({
+      id: String(item.id || ''),
+      source: SOURCE_MAP_GD[source] || source,
+      name: stripHtml(item.name || ''),
+      artist: (item.artist || []).map((a) => stripHtml(a)).filter(Boolean).join(' / '),
+      album: stripHtml(item.album || ''),
+      duration: 0,
+      picture: '',
+      qualities: ['128k', '192k', '320k', 'flac', 'flac24bit'],
+      _gd: { picId: item.pic_id, lyricId: item.lyric_id, gdSource: source },
+    })).filter((item) => item.id);
+  }
+
+  async function searchGdWy(keyword, page, limit) {
+    return searchGd('netease', keyword, page, limit);
+  }
+
+  async function searchGdJoox(keyword, page, limit) {
+    return searchGd('joox', keyword, page, limit);
+  }
+
+  /** GD Studio 直链（真正可用音质），作为 resolve 的浏览器直连兜底。 */
+  async function gdUrl(gdSource, id, br) {
+    const url = `https://music-api.gdstudio.xyz/api.php?types=url&source=${gdSource}&id=${encodeURIComponent(id)}&br=${br}`;
+    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!data?.url) throw new Error('GD 源未返回直链');
+    return { url: data.url, mime: undefined, metadata: null };
+  }
+
+  /** GD Studio 歌词。 */
+  async function gdLyric(gdSource, id) {
+    const url = `https://music-api.gdstudio.xyz/api.php?types=lyric&source=${gdSource}&id=${encodeURIComponent(id)}`;
+    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const lrc = data?.lyric || '';
+    if (!lrc.trim()) throw new Error('无歌词');
+    return lrc;
+  }
+
+  /** GD Studio 封面。 */
+  async function gdPic(gdSource, picId, size = 300) {
+    const url = `https://music-api.gdstudio.xyz/api.php?types=pic&source=${gdSource}&id=${encodeURIComponent(picId)}&size=${size}`;
+    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!data?.url) throw new Error('无封面');
+    return data.url;
+  }
+
+  const SOURCE_MAP_GD = { netease: 'wy', joox: 'joox' };
+
   const SEARCH_ADAPTERS = {
-    wy: [searchWy],
+    wy: [searchGdWy, searchWy],
     tx: [searchTx],
     kg: [searchKg],
     kw: [searchKw],
     mg: [searchMg],
+    joox: [searchGdJoox],
   };
 
   /**
@@ -259,10 +318,18 @@
     kw: [lyricKw],
     mg: [lyricMg],
   };
-
-  async function lyric(platform, id) {
+  async function lyric(platform, id, gdSource) {
     const adapters = LYRIC_ADAPTERS[platform] || [];
     const errors = [];
+    // GD Studio（netease 镜像）CORS 友好，放在最前面；其余平台上游多被 CORS 挡住。
+    if (gdSource) {
+      try {
+        const lrc = await gdLyric(gdSource, id);
+        if (lrc && lrc.trim()) return { lyric: lrc, errors };
+      } catch (error) {
+        errors.push(`gd-${gdSource}: ${error.message || error}`);
+      }
+    }
     for (const adapter of adapters) {
       try {
         const lrc = await adapter(id);
@@ -393,6 +460,9 @@
     lyric,
     playlist,
     identifyPlaylistUrl,
+    gdUrl,
+    gdLyric,
+    gdPic,
     PLATFORM_NAMES,
     SEARCH_ADAPTERS,
     LYRIC_ADAPTERS,

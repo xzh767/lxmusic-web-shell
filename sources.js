@@ -46,6 +46,8 @@
   }
 
   async function fetchJsonWithRetry(url, options = {}, retries = 3) {
+    const t0 = performance.now();
+    const tag = 'net';
     let lastError;
     for (let attempt = 1; attempt <= retries; attempt += 1) {
       try {
@@ -54,15 +56,26 @@
           const error = new Error(`HTTP ${response.status}`);
           error.status = response.status;
           error.transient = response.status === 408 || response.status === 429 || response.status >= 500;
+          if (error.transient && attempt < retries) {
+            console.warn(`%c[LX net] HTTP ${response.status} (transient) ${url.slice(0, 90)} — retry ${attempt}/${retries}`, 'color:#e0af68', { ms: Math.round(performance.now() - t0) });
+          } else {
+            console.warn(`%c[LX net] HTTP ${response.status} ${url.slice(0, 90)}`, 'color:#ff5d73', { ms: Math.round(performance.now() - t0), attempt });
+          }
           throw error;
         }
         const text = await response.text();
         try {
-          return JSON.parse(text);
+          const data = JSON.parse(text);
+          console.log(`%c[LX net] 200 ${url.slice(0, 90)}`, 'color:#89ddff', { ms: Math.round(performance.now() - t0), bytes: text.length });
+          return data;
         } catch {
           // Some fcg-style endpoints answer text/html wrapping JSON.
           const trimmed = text.trim();
-          if (trimmed.startsWith('{') || trimmed.startsWith('[')) return JSON.parse(trimmed);
+          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            const data = JSON.parse(trimmed);
+            console.log(`%c[LX net] 200(html-wrapped) ${url.slice(0, 90)}`, 'color:#89ddff', { ms: Math.round(performance.now() - t0), bytes: text.length });
+            return data;
+          }
           throw new Error('响应不是 JSON');
         }
       } catch (error) {
@@ -70,9 +83,12 @@
         const transient = error?.transient === true
           || /HTTP (429|408|5\d\d)/i.test(String(error?.message || ''))
           || /network|timeout|failed to fetch/i.test(String(error?.message || ''));
-        if (attempt >= retries || !transient) throw error;
+        if (attempt >= retries || !transient) {
+          console.warn(`%c[LX net] FAILED ${url.slice(0, 90)}`, 'color:#ff5d73;font-weight:bold', { error: error.message, attempt, ms: Math.round(performance.now() - t0) });
+          throw error;
+        }
         const delay = 300 * (2 ** (attempt - 1));
-        console.warn(`[重试] ${attempt}/${retries} 失败，${delay}ms 后重试`, error);
+        console.warn(`%c[LX net] retry ${attempt}/${retries} in ${delay}ms`, 'color:#e0af68', { url: url.slice(0, 90), error: error.message });
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -496,21 +512,53 @@
     },
 
     /** Resolve through every enabled source, first success wins. */
-    async resolveWithFallback(platform, id, quality, musicInfo) {
-      const candidates = this.active();
-      if (!candidates.length) throw new Error('还没有装载任何弹药源。');
+    /**
+     * Resolve through every enabled source, first success wins.
+     * A song carrying `_gd` metadata (GD Studio search results) can also be
+     * resolved browser-direct through GD Studio before/after the Ammo chain:
+     * pass options.gd = {source, br} to enable that leg.
+     */
+    async resolveWithFallback(platform, id, quality, musicInfo, options = {}) {
+      const attempts = [];
+      if (options.gd) attempts.push('gd');
+      attempts.push('ammo');
+      if (options.gdAfterAmmo) attempts.push('gd');
+
       const errors = [];
-      for (const source of candidates) {
-        try {
-          const result = await source.resolve(platform, id, quality, musicInfo);
-          console.log(`✅ [Ammo] ${source.name} 解析成功`, result);
-          return { ...result, source: source.name };
-        } catch (error) {
-          console.warn(`❌ [Ammo] ${source.name}: ${error.message || error}`);
-          errors.push(`${source.name}: ${error.message || error}`);
+      for (const leg of attempts) {
+        if (leg === 'gd') {
+          const brMap = { '128k': 128, '192k': 192, '320k': 320, flac: 740, flac24bit: 999 };
+          try {
+            const result = await window.LX_CLIENT_API.gdUrl(
+              options.gd.gdSource,
+              options.gd.id || id,
+              brMap[quality] || 320,
+            );
+            console.log(`✅ [Ammo] GD Studio(${options.gd.gdSource}) 解析成功`, result);
+            return { ...result, source: `GD Studio · ${options.gd.gdSource}` };
+          } catch (error) {
+            console.warn(`❌ [Ammo] GD Studio(${options.gd.gdSource}): ${error.message || error}`);
+            errors.push(`GD Studio: ${error.message || error}`);
+          }
+          continue;
+        }
+        const candidates = this.active();
+        if (!candidates.length) {
+          errors.push('还没有装载任何弹药源。');
+          continue;
+        }
+        for (const source of candidates) {
+          try {
+            const result = await source.resolve(platform, id, quality, musicInfo);
+            console.log(`✅ [Ammo] ${source.name} 解析成功`, result);
+            return { ...result, source: source.name };
+          } catch (error) {
+            console.warn(`❌ [Ammo] ${source.name}: ${error.message || error}`);
+            errors.push(`${source.name}: ${error.message || error}`);
+          }
         }
       }
-      const error = new Error('所有已装载弹药源均解析失败');
+      const error = new Error('所有解析途径均失败');
       error.details = errors;
       throw error;
     },
