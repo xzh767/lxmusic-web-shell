@@ -62,7 +62,7 @@
   /** QQ Music — tang.api.s01s.cn (public, CORS enabled). */
   async function searchTx(keyword, page, limit) {
     const url = `https://tang.api.s01s.cn/music_open_api.php?msg=${encodeURIComponent(keyword)}&type=json&page=${page}`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await fetchJson(url);
     if (!Array.isArray(data)) throw new Error('TX 源返回格式异常');
     return data.slice(0, limit).map((item) => ({
       id: String(item.song_mid || ''),
@@ -80,7 +80,7 @@
   /** Kuwo — oiapi.net (public). */
   async function searchKw(keyword, page, limit) {
     const url = `https://oiapi.net/api/Kuwo?msg=${encodeURIComponent(keyword)}&page=${page}&limit=${limit}`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await fetchJson(url);
     const items = data?.data?.items;
     if (!Array.isArray(items)) throw new Error('KW 源返回格式异常');
     return items.map((item) => ({
@@ -98,7 +98,7 @@
   /** Kugou — songsearch.kugou.com (public JSON). */
   async function searchKg(keyword, page, limit) {
     const url = `https://songsearch.kugou.com/song_search_v2?keyword=${encodeURIComponent(keyword)}&page=${page}&pagesize=${limit}&userid=0&clientver=0&tag=1&filter=1&iscorrection=1&privilegefilter=0`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await fetchJson(url);
     const list = data?.data?.lists || data?.data?.info || [];
     if (!Array.isArray(list)) throw new Error('KG 源返回格式异常');
     return list.map((item) => ({
@@ -119,7 +119,7 @@
       song: 1, album: 0, singer: 0, tagSong: 0, mvSong: 0, songlist: 0, bestShow: 1,
     }));
     const url = `https://pd.musicapp.migu.cn/MIGUM3.0/v1.0/content/search_all.do?ua=Android_migu&version=5.0.1&text=${encodeURIComponent(keyword)}&pageNo=${page}&pageSize=${limit}&searchSwitch=${switchParam}`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await fetchJson(url);
     const list = data?.songResultData?.result || [];
     if (!Array.isArray(list)) throw new Error('MG 源返回格式异常');
     return list.map((item) => ({
@@ -143,9 +143,7 @@
   async function searchWy(keyword, page, limit) {
     const offset = (page - 1) * limit;
     const url = `https://music.163.com/api/search/get/web?csrf_token=&s=${encodeURIComponent(keyword)}&type=1&offset=${offset}&total=true&limit=${limit}`;
-    const text = await fetchText(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://music.163.com/' },
-    });
+    const text = await fetchText(url);
     let data;
     try {
       data = JSON.parse(text.trim());
@@ -174,7 +172,7 @@
    */
   async function searchGd(source, keyword, page, limit) {
     const url = `https://music-api.gdstudio.xyz/api.php?types=search&source=${source}&name=${encodeURIComponent(keyword)}&count=${limit}&pages=${page}`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await fetchJson(url);
     if (!Array.isArray(data)) throw new Error('GD 源返回格式异常');
     return data.map((item) => ({
       id: String(item.id || ''),
@@ -200,7 +198,7 @@
   /** GD Studio 直链（真正可用音质），作为 resolve 的浏览器直连兜底。 */
   async function gdUrl(gdSource, id, br) {
     const url = `https://music-api.gdstudio.xyz/api.php?types=url&source=${gdSource}&id=${encodeURIComponent(id)}&br=${br}`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await fetchJson(url);
     if (!data?.url) throw new Error('GD 源未返回直链');
     return { url: data.url, mime: undefined, metadata: null };
   }
@@ -208,7 +206,7 @@
   /** GD Studio 歌词。 */
   async function gdLyric(gdSource, id) {
     const url = `https://music-api.gdstudio.xyz/api.php?types=lyric&source=${gdSource}&id=${encodeURIComponent(id)}`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await fetchJson(url);
     const lrc = data?.lyric || '';
     if (!lrc.trim()) throw new Error('无歌词');
     return lrc;
@@ -217,7 +215,7 @@
   /** GD Studio 封面。 */
   async function gdPic(gdSource, picId, size = 300) {
     const url = `https://music-api.gdstudio.xyz/api.php?types=pic&source=${gdSource}&id=${encodeURIComponent(picId)}&size=${size}`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await fetchJson(url);
     if (!data?.url) throw new Error('无封面');
     return data.url;
   }
@@ -260,7 +258,7 @@
 
   async function lyricTx(id) {
     const url = `https://i.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${encodeURIComponent(id)}&g_tk=5381&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://y.qq.com/' } });
+    const data = await fetchJson(url);
     const raw = data?.lyric || '';
     const decoded = raw ? decodeURIComponent(escape(raw)) : '';
     if (!decoded.trim()) throw new Error('无歌词');
@@ -269,7 +267,7 @@
 
   async function lyricWy(id) {
     const url = `https://music.163.com/api/song/lyric?id=${encodeURIComponent(id)}&lv=1&kv=1&tv=-1`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://music.163.com/' } });
+    const data = await fetchJson(url);
     const raw = data?.lrc?.lyric || '';
     if (!raw.trim()) throw new Error('无歌词');
     return raw;
@@ -277,11 +275,11 @@
 
   async function lyricKg(id) {
     const searchUrl = `https://lyrics.kugou.com/search?ver=1&man=yes&client=mobi&keyword=&duration=&hash=${encodeURIComponent(id)}`;
-    const searchData = await fetchJson(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const searchData = await fetchJson(searchUrl);
     const candidate = searchData?.candidates?.[0];
     if (!candidate?.id || !candidate?.accesskey) throw new Error('未找到歌词');
     const url = `https://lyrics.kugou.com/download?ver=1&client=pc&id=${encodeURIComponent(candidate.id)}&accesskey=${encodeURIComponent(candidate.accesskey)}&fmt=lrc&charset=utf8`;
-    const data = await fetchJson(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const data = await fetchJson(url);
     const content = data?.content || '';
     if (!content) throw new Error('无歌词');
     return decodeBase64Utf8(content);
@@ -289,7 +287,7 @@
 
   async function lyricKw(id) {
     const url = `https://api.qijieya.cn/meting/?server=kuwo&type=lrc&id=${encodeURIComponent(id)}`;
-    const text = await fetchText(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const text = await fetchText(url);
     const lines = text.split(/\r?\n/).filter((line) => /^\[\d+:\d+/.test(line) || /^\[(ti|ar|al|by|offset):/.test(line));
     const lrc = lines.join('\n');
     if (!lrc.trim() || lrc.includes('暂无歌词')) throw new Error('无歌词');
@@ -298,7 +296,7 @@
 
   async function lyricMg(id) {
     const url = `https://api.qijieya.cn/meting/?server=migu&type=lrc&id=${encodeURIComponent(id)}`;
-    const text = await fetchText(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const text = await fetchText(url);
     const lines = text.split(/\r?\n/).filter((line) => /^\[\d+:\d+/.test(line) || /^\[(ti|ar|al|by|offset):/.test(line));
     const lrc = lines.join('\n');
     if (!lrc.trim() || lrc.includes('暂无歌词')) throw new Error('无歌词');
@@ -388,7 +386,7 @@
       try {
         const data = await fetchJson(attempt.url, {
           method: attempt.method,
-          headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://music.163.com/', 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json' },
           body: attempt.body,
         });
         const pl = data?.playlist || data?.result || {};

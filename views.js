@@ -41,7 +41,9 @@
         if (!data?.ok) throw new Error(data?.message || '搜索失败');
         const results = Array.isArray(data.results) ? data.results : [];
         if (results.length) {
-          return { results, errors: result.errors, via: 'gateway' };
+          // The gateway covered it; the client-side CORS failures are noise.
+          console.log(`%c[LX search] ${platform}: 浏览器直连失败 → 网关兜底成功 ${results.length} 条`, 'color:#7fd6a0', { clientErrors: result.errors });
+          return { results, errors: [], via: 'gateway' };
         }
       } catch (error) {
         result.errors.push(`网关: ${error.message || error}`);
