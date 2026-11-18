@@ -184,7 +184,7 @@ sources.js
 lyrics.js
 ```
 
-- **GitHub Pages**：Settings → Pages → Deploy from a branch → 选 `main` 分支、目录 `/ (root)`。
+- **GitHub Pages**：Settings → Pages → Deploy from a branch → 选 `master` 分支、目录 `/ (root)`。
 - **Netlify**：导入仓库，Build command 留空，Publish directory 填仓库根目录。
 - **Vercel**：Framework Preset 用 `Other`，Build Command 留空，Root Directory 用仓库根目录。
 - **Cloudflare Pages / 其它静态托管**：能提供上面几个文件即可。
@@ -320,7 +320,7 @@ Upstream music platforms rate-limit overseas hosting IPs aggressively, so search
 
 Static site, no build step. Serve the repository root:
 
-- **GitHub Pages** — Settings → Pages → Deploy from a branch → `main` → `/ (root)`.
+- **GitHub Pages** — Settings → Pages → Deploy from a branch → `master` → `/ (root)`.
 - **Netlify** — import the repository, leave Build command empty, publish the repository root.
 - **Vercel** — Framework Preset `Other`, Build Command empty, Root Directory = repository root.
 - **Cloudflare Pages / any static host** — anything that serves `index.html`, `app.js`, `views.js`, `client-api.js`, `sources.js`, `lyrics.js` and `style.css`.
