@@ -1,7 +1,7 @@
 # LX Music Web Shell
 
-> **A lightweight web shell for pluggable music resolvers (Ammo).**  
-> **一个面向可插拔音乐解析后端（Ammo）的轻量 Web Shell。**
+> **A source-agnostic web player for LX Music-compatible search, playback and pluggable resolver backends.**
+> **一个面向可插拔音乐解析后端（Ammo）的 LX Music 风格 Web 播放器。**
 
 [中文](#中文) · [English](#english)
 
@@ -11,61 +11,42 @@
 
 ## 项目简介
 
-LX Music Web Shell 是一个与具体音源实现解耦的音乐搜索、解析与播放前端。
+LX Music Web Shell 是一个与具体音源实现解耦的音乐搜索、解析与播放前端，界面与交互对标 **LX Music Desktop**：左侧导航、常驻播放栏、播放队列、收藏、歌单与歌词面板。
 
-核心思想是 **“枪弹分离”**：
+核心思想是 **"枪弹分离"**：页面本体（枪）只负责界面、队列、歌词、收藏、歌单与源管理；解析（弹药）由外部 Ammo 后端完成。Web Shell 不包含具体第三方 resolver 实现、API Key 或私有上游配置，**也不代理音频流**。
 
 ```text
 ┌──────────────────────────────┐
 │        Web Shell / 枪         │
-│ UI · 搜索 · 播放器 · 装弹管理 │
-│ 回退 · 重试 · 日志 · Metadata │
+│ UI · 搜索 · 队列 · 播放栏     │
+│ 歌词 · 收藏 · 歌单 · 源管理   │
+│ 回退 · 重试 · 浏览器直连      │
 └──────────────┬───────────────┘
                │ HTTP / JSON
                ▼
 ┌──────────────────────────────┐
 │         Ammo / 弹药           │
 │ 可选搜索 · 解析 · 上游适配    │
-│ 缓存 · 限流 · 回退             │
+│ 缓存 · 限流 · 回退            │
 └──────────────┬───────────────┘
-               │
                ▼
-          上游音乐服务
-               │
-               ▼
-          最终音频直链
-               │
-               ▼
-             浏览器
+          上游音乐服务 → 最终音频直链 → 浏览器
 ```
 
-Web Shell 不包含具体第三方 resolver 实现、API Key 或私有上游配置，也不代理最终音频流。
-
-> **免责声明 / Disclaimer**  
+> **免责声明 / Disclaimer**
 > 本项目只是通用前端壳和接口规范，不授予任何第三方音乐平台、API、resolver 或媒体资源的使用授权。使用者、Ammo 运营者和部署者应自行确认权限，并遵守当地法律、版权要求、第三方服务条款、速率限制和滥用政策。本项目不构成法律意见，也不是规避版权、风控或访问控制的工具。
 
 ## 在线 Demo / Live Demo
 
 ### Web Shell
 
-**https://music.xlz767.dpdns.org/**
+**https://lxmusic-webshell.netlify.app/**
 
-作者维护的 Web Shell Demo。
+### Ammo Gateway（作者维护的演示后端）
 
-### Ammo Gateway
+**Manifest：** https://music-ammo-api-gateway.xlz767.dpdns.org/manifest.json
 
-**Manifest：**  
-**https://music-ammo-api-gateway.xlz767.dpdns.org/manifest.json**
-
-这是 Ammo Gateway 的公开 Manifest 入口，而不是 Gateway 网站首页。
-
-Gateway 根目录故意关闭目录索引，因此：
-
-```text
-https://music-ammo-api-gateway.xlz767.dpdns.org/
-```
-
-返回 `403 Forbidden` 是正常的安全配置，**不要把根目录 URL 当作 Ammo 地址**，应使用上面的 `/manifest.json`。
+这是 Ammo Gateway 的公开 Manifest 入口，而不是 Gateway 网站首页。Gateway 根目录故意关闭目录索引，因此返回 `403 Forbidden` 是正常的安全配置。
 
 **Demo 使用声明 / Demo Usage Disclaimer：**
 
@@ -74,135 +55,159 @@ https://music-ammo-api-gateway.xlz767.dpdns.org/
 - **禁止批量抓取、压力测试、高频循环请求、大规模自动化解析或其他滥用行为。**
 - 不要把 Demo 当生产后端，也不要将第三方项目的大量流量转发到 Demo。
 - 作者可以在不另行通知的情况下限制、拒绝或封禁异常流量。
-- Demo 不代表作者为任何第三方 Ammo、resolver、音乐平台或上游服务背书。
 
-## 核心特性
+## 界面与功能
 
-- **可插拔 Ammo**：通过公开 `manifest.json` 装载外部后端。
-- **搜索与解析解耦**：Search 不要求由 Ammo 提供；Search API 可以独立部署。
-- **默认不选择搜索源**：避免页面打开后自动制造搜索流量。
-- **解析回退**：多个 Ammo 可以按配置顺序逐个尝试。
-- **临时失败重试**：网络错误、408、429、5xx 等临时错误默认最多重试 3 次。
-- **浏览器 Console 排障**：记录请求顺序、耗时和失败原因。
-- **Metadata**：支持 Ammo 返回标准化音频元数据。
-- **HTTP 直链提示**：发现 HTTP 音频 URL 时提示 Mixed Content 风险，但不会改写 URL。
-- **不代理音频**：最终音频由浏览器直接访问，不把 Web Shell 变成音频 CDN。
-- **本地装弹配置**：Ammo Manifest 保存在浏览器 `localStorage`。
-- **纯静态前端**：无需 PHP、Node.js 或构建链即可部署。
+| 模块 | 说明 |
+|---|---|
+| **搜索** | 五平台单搜 / 聚合搜索、分页、平台独立失败不阻塞其它平台 |
+| **播放队列** | 队列持久化到 localStorage、列表循环 / 单曲循环 / 随机播放、上下曲、移除 |
+| **播放栏** | 常驻播放条、进度拖拽、音量、HTTP 直链提示、MediaSession（锁屏控制） |
+| **歌词** | LRC 解析、逐行高亮自动滚动、点击歌词跳转、面板可开合 |
+| **收藏** | 单曲收藏、导入 / 导出 JSON 备份 |
+| **歌单** | 粘贴歌单链接或「平台 + 歌单 ID」打开，保存常用歌单 |
+| **源管理** | 三种弹药：Manifest Ammo、LX 音源脚本（浏览器沙箱）、通用 HTTP 端点；可停用 / 卸载 / 连通性测试 |
+| **快捷键** | `Space` 播放/暂停，`Shift+←/→` 上下曲 |
+| **移动端** | 底部导航 + 紧凑播放栏，触屏可用 |
+
+## 架构要点：浏览器直连优先
+
+上游音乐平台普遍对**海外服务器 IP** 风控极严，因此本前端采用「浏览器直连优先，网关兜底」的策略：
+
+```text
+搜索 / 歌词 / 歌单
+   ↓ 先走浏览器直连
+   ├─ QQ      tang.api.s01s.cn        （开放 CORS）
+   ├─ 酷我    oiapi.net               （开放 CORS）
+   ├─ 酷狗    songsearch.kugou.com
+   ├─ 咪咕    pd.musicapp.migu.cn
+   └─ 网易云  music.163.com           （国内浏览器直连可用）
+   ↓ 直连失败（无 CORS / 风控）时
+   ↓ 改走 Ammo Gateway 归一化接口
+解析（Resolve）
+   ↓ 始终由 Ammo 完成
+   └─ 需要服务端凭据、私有上游与串行回退，不应放在浏览器
+```
+
+也就是说：**除 Ammo 解析请求外，前端尽量不经过任何自建服务器**。这意味着：
+
+- 你的浏览器在哪个网络，搜索结果就取决于哪个网络的风控情况；
+- 网关只做轻量 JSON 归一化，不缓存、不代理音频；
+- 任何人都可以把自己的 Ammo 接进这个壳里，不必依赖作者的服务。
+
+## 支持的自定义源（Ammo）
+
+源管理页支持三类弹药，共用一套调用约定：
+
+### 1. Manifest Ammo（推荐）
+
+填写 `manifest.json` 地址即可：
+
+```json
+{
+  "version": 1,
+  "id": "my-ammo",
+  "name": "My Ammo",
+  "versionName": "1.0.0",
+  "baseUrl": "https://ammo.example",
+  "platforms": {
+    "tx": { "name": "腾讯音乐", "qualities": ["128k", "320k", "flac"] }
+  },
+  "endpoints": {
+    "search": "/api/search",
+    "resolve": "/api/resolve"
+  }
+}
+```
+
+### 2. LX 音源脚本（浏览器沙箱）
+
+直接导入 LX Music Desktop 的自定义源 `.js`，前端在浏览器里模拟 LX Runtime：
+
+```js
+const { EVENT_NAMES, request, on, send } = globalThis.lx
+
+on(EVENT_NAMES.request, async ({ source, info }) => {
+  const url = await fetchSomeUpstream(source, info.musicInfo, info.type)
+  return url
+})
+
+send(EVENT_NAMES.inited, {
+  sources: {
+    tx: { name: 'tx', type: 'music', actions: ['musicUrl'], qualitys: ['128k', '320k'] },
+  },
+})
+```
+
+已实现的 LX Runtime 子集：`globalThis.lx`、`EVENT_NAMES`、`on`、`send`、`request`（自动解析 JSON 响应）、`utils`、`log`、`action.showNotice`。
+
+> ⚠️ 脚本直连上游，上游若无 CORS 头浏览器会拦截。脚本仅在本机浏览器运行，不会上传到任何服务器。
+
+### 3. 通用 HTTP 端点
+
+手填 `Base URL` + `Resolve 路径`（可选 `Search 路径`），适合任何返回 `{ "ok": true, "url": "..." }` 的接口。
 
 ## 项目结构
 
 ```text
 lxmusic-web-shell/
-├── index.html
-├── app.js
-├── style.css
+├── index.html            应用壳布局（侧栏 / 视图 / 播放栏）
+├── style.css             深色主题
+├── app.js                核心状态、存储、播放、队列、收藏
+├── views.js              各视图逻辑与源管理 UI
+├── client-api.js         浏览器直连的搜索 / 歌词 / 歌单适配器
+├── sources.js            Ammo 运行时（Manifest / LX 脚本 / HTTP）
+├── lyrics.js             歌词面板与 LRC 解析
 ├── ammo.manifest.example.json
 ├── README.md
 ├── LICENSE
 └── docs/
     ├── AMMO_API.md
-    └── AMMO_STANDARD.md
+    ├── AMMO_STANDARD.md
+    ├── LX_SOURCE_PORTING_EXAMPLE.md
+    └── examples/lx-gateway-source.js
 ```
 
 ## 快速开始
 
-### 1. 部署 Web Shell
+### 部署
 
-直接托管：
+纯静态站点，无需构建。直接托管仓库根目录即可：
 
 ```text
 index.html
-app.js
 style.css
+app.js
+views.js
+client-api.js
+sources.js
+lyrics.js
 ```
 
-无需构建。
+- **GitHub Pages**：Settings → Pages → Deploy from a branch → 选 `main` 分支、目录 `/ (root)`。
+- **Netlify**：导入仓库，Build command 留空，Publish directory 填仓库根目录。
+- **Vercel**：Framework Preset 用 `Other`，Build Command 留空，Root Directory 用仓库根目录。
+- **Cloudflare Pages / 其它静态托管**：能提供上面几个文件即可。
 
-### 2. 装载 Ammo
+### 使用
 
-打开 **装弹管理 / Ammo Manager**，填写：
+1. 打开页面 → 左侧「源管理」。
+2. 「Manifest Ammo」标签填入 Manifest URL → 「装载」。
+3. 回到「搜索」，选择平台或聚合搜索，输入关键词。
+4. 点击结果「播放」，底部播放栏开始播放；点「词」打开歌词面板。
+5. 「队列」管理播放顺序，「收藏」保存喜欢的歌。
 
-```text
-https://your-ammo.example/manifest.json
+### 可选配置
+
+在 `index.html` 的 `<script>` 之前加入即可覆盖默认端点：
+
+```html
+<script>
+  window.LX_WEB_SHELL_SEARCH_API = 'https://your-host/api/search.php'
+  window.LX_WEB_SHELL_PLAYLIST_API = 'https://your-host/api/playlist.php'
+  window.LX_WEB_SHELL_LYRIC_API = 'https://your-host/api/lyric.php'
+</script>
 ```
-
-点击“装载”。Web Shell 会从 Manifest 获取 Ammo 名称、版本、支持的平台/音质以及 Resolve API 地址。
-
-### 3. 搜索
-
-搜索下拉框默认保持空白：
-
-```text
-请选择搜索平台
-```
-
-不会自动聚合。
-
-搜索结果提供标准化的 `source + id`，之后交给已装载 Ammo 做 Resolve。
-
-### 4. 解析
-
-多个 Ammo 时：
-
-```text
-Ammo A → 失败 → Ammo B → 成功
-```
-
-临时网络失败会自动重试，成功后立即停止继续请求其他 Ammo。
-
-## 部署方式
-
-### GitHub Pages
-
-1. Fork/使用本仓库 `xzh767/lxmusic-web-shell`。
-2. 打开 **Settings → Pages**。
-3. Source 选择 **Deploy from a branch**。
-4. Branch 选择 `master`，目录选择 `/ (root)`。
-5. 保存，等待 Pages 发布。
-6. 如需自定义域名，在 Pages 设置中填写域名并按 GitHub 提示配置 DNS。
-
-本项目不需要 Actions 构建流程。
-
-### Netlify
-
-推荐 Git 部署：
-
-1. Netlify → **Add new project → Import an existing project**。
-2. 连接 GitHub。
-3. 选择 `xzh767/lxmusic-web-shell`。
-4. Build command 留空。
-5. Publish directory 使用仓库根目录。
-6. Deploy。
-
-连接 Git 后，后续 push 会自动触发新部署。
-
-临时测试也可以使用 Netlify Drop。
-
-### Vercel
-
-1. Vercel → **Add New → Project**。
-2. Import `xzh767/lxmusic-web-shell`。
-3. Framework Preset 使用 **Other** 或自动识别。
-4. Build Command 留空。
-5. Root Directory 使用项目根目录。
-6. Deploy。
-
-项目是纯静态站点，不需要 Serverless Function。
-
-### Cloudflare Pages / 其他静态托管
-
-任何能直接提供：
-
-```text
-/index.html
-/app.js
-/style.css
-```
-
-的静态托管都可以。
-
-Ammo 则可以部署在 PHP、Node.js、Python、Go、Serverless 或其他能提供 HTTP/JSON 的环境。
 
 ## Ammo / 弹药接口
 
@@ -213,20 +218,18 @@ GET  /manifest.json
 POST /api/resolve
 ```
 
-可选搜索：
+可选搜索 / 歌词 / 歌单：
 
 ```text
-GET /api/search
+GET  /api/search
+GET  /api/lyric
+GET  /api/playlist
 ```
 
-Search 和 Resolve 不要求属于同一个 Ammo。
-
-完整标准：[`docs/AMMO_STANDARD.md`](docs/AMMO_STANDARD.md)  
+完整标准：[`docs/AMMO_STANDARD.md`](docs/AMMO_STANDARD.md)
 精简 API：[`docs/AMMO_API.md`](docs/AMMO_API.md)
 
 ## 与 LX Music Desktop 音源的关系
-
-熟悉 LX Music Desktop 音源的开发者可以这样理解：
 
 ```text
 LX Music source                  Ammo
@@ -239,32 +242,15 @@ info.type                        request.quality
 return playable URL              { "ok": true, "url": "..." }
 ```
 
-区别：
-
-- LX 音源运行在 LX Music Desktop Runtime 中；Ammo 是独立 HTTP 服务。
-- LX 音源使用内部事件协议；Ammo 使用普通 JSON/HTTP。
-- Ammo 不限定语言：PHP、Node、Python、Go 等均可。
-- Ammo 可以把上游地址、凭据、复杂回退逻辑留在服务端。
-
-熟悉 LX 音源的人通常只需把“事件回调”改成 HTTP handler，并按照标准字段返回结果即可。
-
 ## CORS
 
-由于 Web Shell 在浏览器中直接调用 Ammo，Ammo 必须正确提供 CORS。
-
-推荐：
+由于 Web Shell 在浏览器中直接调用 Ammo 与部分上游，Ammo 必须正确提供 CORS：
 
 ```http
 Access-Control-Allow-Origin: https://your-web-shell.example
 Access-Control-Allow-Methods: GET, POST, OPTIONS
 Access-Control-Allow-Headers: Content-Type
 Vary: Origin
-```
-
-能够限定 Origin 时，优先不要使用：
-
-```http
-Access-Control-Allow-Origin: *
 ```
 
 ## 流量边界
@@ -281,40 +267,11 @@ Browser → Web Shell → light JSON → Ammo → audio URL → Browser
 Browser → Web Shell/Ammo → entire MP3/FLAC/M4A stream
 ```
 
-因此 Web Shell 不应该被改造成音频反向代理或大文件缓存节点。
-
-## 运营 Ammo 的建议
-
-如果 Ammo 自己有多个上游，推荐：
-
-```text
-Provider A
-Provider B
-Provider C
-    ↓
-random / priority
-    ↓
-sequential fallback
-```
-
-并加入：
-
-- 超时
-- 参数校验
-- 短缓存
-- provider cooldown
-- 合理速率限制
-- 审计日志与脱敏
-- 私有 API Key 隔离
-- 禁止任意 URL 开放代理
-
-**不要并行轰击所有上游。**
+Web Shell 不会被改造成音频反向代理或大文件缓存节点。
 
 ## 隐私与日志
 
-Ammo 运营者可能根据自己的实现记录 IP、平台、歌曲 ID、缓存命中、上游错误等信息。
-
-因此敏感日志应：
+Ammo 运营者可能根据自己的实现记录 IP、平台、歌曲 ID、缓存命中、上游错误等信息。因此敏感日志应：
 
 - 不暴露成静态网页资源；
 - 放到 Web Root 外，或显式禁止 HTTP 访问；
@@ -327,142 +284,58 @@ Ammo 运营者可能根据自己的实现记录 IP、平台、歌曲 ID、缓存
 
 ## Overview
 
-LX Music Web Shell is a source-agnostic frontend for music search, resolving and playback.
+LX Music Web Shell is a source-agnostic frontend for music search, resolving and playback, with an LX Music Desktop–style layout: side navigation, a persistent player bar, play queue, favorites, playlists and a lyrics panel.
 
-Its core design is **“gun / ammo separation”**:
+Its core design is **"gun / ammo separation"**:
 
-- **Web Shell (gun):** UI, player, search, Ammo management, retries, fallback and client-side diagnostics.
-- **Ammo:** an external HTTP backend that can provide Resolve and optionally Search.
+- **Web Shell (gun):** UI, player, queue, search, lyrics, favorites, playlist and source management.
+- **Ammo:** an external HTTP backend that resolves a song identity into a playable URL.
 
-The Web Shell does not bundle third-party resolver implementations, private API keys or private upstream configuration, and it does not proxy final audio streams.
-
-> **Disclaimer**  
-> This project is a generic frontend and interface specification. It does not grant authorization to use any third-party music service, API, resolver or media resource. Operators and users are responsible for authorization, copyright, applicable law, third-party terms, rate limits and abuse policies. This project is not legal advice and is not intended to circumvent copyright, access controls or platform restrictions.
+The shell never proxies audio and bundles no third-party resolver implementation.
 
 ## Live Demo
 
-### Web Shell
+- Web Shell: **https://lxmusic-webshell.netlify.app/**
+- Ammo manifest: **https://music-ammo-api-gateway.xlz767.dpdns.org/manifest.json**
 
-**https://music.xlz767.dpdns.org/**
-
-### Ammo Gateway
-
-**Manifest:**  
-**https://music-ammo-api-gateway.xlz767.dpdns.org/manifest.json**
-
-This is the public Ammo Manifest entrypoint. It is **not** the gateway homepage.
-
-The gateway root intentionally has directory indexing disabled, so:
-
-```text
-https://music-ammo-api-gateway.xlz767.dpdns.org/
-```
-
-may return `403 Forbidden`. This is expected. Use `/manifest.json` when loading the Demo Ammo.
-
-### Demo usage disclaimer
-
-- Public demonstration service; no SLA.
-- Caching, rate limiting, cooldowns and access controls may be enabled or changed.
-- **No bulk scraping, stress testing, high-frequency loops or large-scale automated resolving.**
-- Do not treat the Demo as a production backend or relay large volumes of third-party traffic through it.
-- Abnormal traffic may be throttled, rejected or blocked without notice.
+> **Disclaimer**
+> This project is a generic frontend and interface specification. It does not grant authorization to use any third-party music service, API, resolver or media resource. Operators and users are responsible for authorization, copyright, applicable law, third-party terms, rate limits and abuse policies.
 
 ## Core features
 
-- Pluggable Ammo via `manifest.json`.
-- Search independent from installed Ammo.
-- Empty search-source selection by default.
-- Sequential Ammo fallback and three retries for transient request failures.
-- Browser-console diagnostics.
-- Optional normalized metadata.
-- HTTP audio URL warning without rewriting.
-- No audio reverse proxy.
-- Local Ammo configuration.
-- Pure static frontend with no build step.
+- Five-platform search (single or aggregated) with pagination and per-platform failure isolation.
+- Persistent play queue with list-loop / single-loop / shuffle, previous / next and removal.
+- Persistent player bar: progress seeking, volume, HTTP-direct-link warning, MediaSession integration.
+- LRC lyrics with per-line highlighting, auto-scroll and click-to-seek.
+- Favorites with JSON import / export.
+- Playlist opening by link or by platform + id, with saved playlists.
+- Three source kinds: Manifest Ammo, LX custom-source scripts (browser sandbox) and plain HTTP endpoints.
+- Keyboard shortcuts, mobile layout, browser-console diagnostics.
+
+## Browser-first data flow
+
+Upstream music platforms rate-limit overseas hosting IPs aggressively, so search, lyrics and playlists are fetched **from the browser first** and only fall back to the Ammo gateway when the browser cannot reach the upstream (CORS / geo-blocking). Resolve always goes through Ammo, because it needs server-side credentials and sequential fallback.
 
 ## Deployment
 
-### GitHub Pages
+Static site, no build step. Serve the repository root:
 
-Use **Settings → Pages → Deploy from a branch**, select branch `master` and `/ (root)`. No build command is required.
-
-### Netlify
-
-Import `xzh767/lxmusic-web-shell` as an existing Git repository. Leave Build Command empty and publish the repository root. Git pushes can trigger automatic redeploys. Netlify Drop is suitable for temporary manual deployment.
-
-### Vercel
-
-Import the repository, use **Other**/automatic framework detection, leave Build Command empty, keep the root directory, and deploy.
-
-### Cloudflare Pages / other static hosts
-
-Any host capable of serving `index.html`, `app.js` and `style.css` can host the Web Shell.
+- **GitHub Pages** — Settings → Pages → Deploy from a branch → `main` → `/ (root)`.
+- **Netlify** — import the repository, leave Build command empty, publish the repository root.
+- **Vercel** — Framework Preset `Other`, Build Command empty, Root Directory = repository root.
+- **Cloudflare Pages / any static host** — anything that serves `index.html`, `app.js`, `views.js`, `client-api.js`, `sources.js`, `lyrics.js` and `style.css`.
 
 ## Ammo protocol
 
-Minimal Resolve Ammo:
-
 ```text
 GET  /manifest.json
-POST /api/resolve
+POST /api/resolve          { "source": "tx", "id": "...", "quality": "320k" }
+GET  /api/search           optional
+GET  /api/lyric            optional
+GET  /api/playlist         optional
 ```
 
-Optional Search:
-
-```text
-GET /api/search
-```
-
-Search and Resolve may be separate services.
-
-See [`docs/AMMO_STANDARD.md`](docs/AMMO_STANDARD.md) for the developer standard and [`docs/AMMO_API.md`](docs/AMMO_API.md) for the compact API reference.
-
-## LX Music Desktop source comparison
-
-The conceptual mapping is:
-
-```text
-LX Music source                  Ammo
-────────────────────────────    ────────────────────────────
-globalThis.lx                    HTTP server runtime
-request event                    POST /api/resolve
-inited event                     GET /manifest.json
-musicInfo                        request.musicInfo / id
-type                             request.quality
-playable URL                     { "ok": true, "url": "..." }
-```
-
-LX sources run inside LX Music Desktop's runtime; Ammo backends are standalone HTTP services and can be written in PHP, Node.js, Python, Go or another suitable language.
-
-## CORS
-
-Recommended:
-
-```http
-Access-Control-Allow-Origin: https://your-web-shell.example
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type
-Vary: Origin
-```
-
-Prefer an explicit Web Shell Origin over `*` when possible.
-
-## Traffic boundary
-
-Intended path:
-
-```text
-Browser → Web Shell → light JSON → Ammo → audio URL → Browser
-```
-
-The Web Shell/Ammo host should not become an audio reverse proxy or bulk media cache.
-
-## Production recommendations
-
-Use timeouts, validation, short caching, provider cooldowns, sequential fallback, rate limiting, secret isolation and audit logging. Do not expose arbitrary-URL proxy functionality.
-
-Sensitive logs should never be directly exposed as static web resources; keep them outside the Web Root when possible or explicitly deny HTTP access.
+See [`docs/AMMO_STANDARD.md`](docs/AMMO_STANDARD.md) and [`docs/AMMO_API.md`](docs/AMMO_API.md).
 
 ## License
 
