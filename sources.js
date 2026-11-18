@@ -497,6 +497,10 @@
     remove(id) {
       this.sources = this.sources.filter((item) => item.id !== id);
       this.persist();
+      // 用户显式卸载演示弹药后不再自动装回。
+      try {
+        if (id === 'lx-unified-ammo-gateway') localStorage.setItem('lx-web-shell-default-ammo-v1', 'skip');
+      } catch { /* ignore */ }
     },
 
     setEnabled(id, enabled) {
@@ -525,6 +529,12 @@
       if (options.gdAfterAmmo) attempts.push('gd');
 
       const errors = [];
+      let gdTried = false;
+      // Zero-ammo fallback: without any loaded source, try GD Studio for
+      // netease-matched songs; otherwise surface a clear hint.
+      if (!this.active().length && !options.gd) {
+        console.warn('%c[LX ammo] 未装载任何弹药，resolve 将依赖 GD Studio（仅 netease/joox）', 'color:#e0af68');
+      }
       for (const leg of attempts) {
         if (leg === 'gd') {
           const brMap = { '128k': 128, '192k': 192, '320k': 320, flac: 740, flac24bit: 999 };
@@ -585,11 +595,30 @@
     },
   };
 
+  const DEFAULT_AMMO_MANIFEST = 'https://music-ammo-api-gateway.xlz767.dpdns.org/manifest.json';
+  const DEFAULT_AMMO_FLAG = 'lx-web-shell-default-ammo-v1';
+
+  async function ensureDefaultAmmo() {
+    // 首次访问且没有任何弹药时，自动装载作者的演示网关（可在源管理卸载）。
+    try {
+      if (localStorage.getItem(DEFAULT_AMMO_FLAG) === 'skip') return;
+      if (registry.sources.length) return;
+      const manifest = await fetchJsonWithRetry(DEFAULT_AMMO_MANIFEST, { cache: 'no-store' });
+      if (!manifest?.id || !manifest?.endpoints?.resolve) return;
+      registry.add(createManifestSource(manifest, DEFAULT_AMMO_MANIFEST));
+      localStorage.setItem(DEFAULT_AMMO_FLAG, 'loaded');
+      console.log('%c[LX ammo] 已自动装载演示弹药（源管理可卸载，卸载后不再自动装）', 'color:#c792ea;font-weight:bold');
+    } catch (error) {
+      console.warn('%c[LX ammo] 演示弹药装载失败（不影响手动装弹）', 'color:#e0af68', error.message);
+    }
+  }
+
   window.LX_AMMO = {
     registry,
     fetchJsonWithRetry,
     joinUrl,
     esc,
+    ensureDefaultAmmo,
     PLATFORM_NAMES: {
       wy: '网易云音乐',
       tx: '腾讯音乐',

@@ -669,6 +669,13 @@
     A.syncPlayButton();
     A.switchView('search');
 
+    // First visit with zero ammo: load the demo gateway automatically so the
+    // shell plays out of the box (removable in 源管理; removal is remembered).
+    window.LX_AMMO.ensureDefaultAmmo().then(() => {
+      renderAmmoList();
+      A.renderAmmoBadge();
+    });
+
     // v1 ammo key migration (old single-page shell stored manifests here)
     try {
       const legacy = JSON.parse(localStorage.getItem('lx-web-shell-ammo-v1') || '[]');
