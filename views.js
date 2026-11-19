@@ -51,7 +51,7 @@
 
   async function runSearch(page = 1) {
     const keyword = $('keyword').value.trim();
-    const platform = $('ammoSelect').value;
+    const platform = window.LX_APP?.state?.platform || document.querySelector('#platformTabs .tab.active')?.dataset.platform || 'wy';
     if (!keyword) return showNotice('searchNotice', '请输入搜索关键词。', 'error');
     if (!platform) return showNotice('searchNotice', '请选择搜索平台；默认不启用搜索。', 'error');
 
@@ -494,6 +494,14 @@
       });
     });
 
+    document.querySelectorAll('#platformTabs .tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#platformTabs .tab').forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        if (window.LX_APP) window.LX_APP.state.platform = tab.dataset.platform;
+        console.log(`%c[LX search] 平台切换 → ${tab.dataset.platform}`, 'color:#c792ea');
+      });
+    });
     $('searchButton').addEventListener('click', () => runSearch(1));
     $('keyword').addEventListener('keydown', (event) => {
       if (event.key === 'Enter') runSearch(1);
@@ -569,16 +577,41 @@
         toast('还没有播放歌曲', 'warn');
       }
     });
+    $('lyricsButton').addEventListener('click', () => window.LX_LYRICS?.open());
     $('closeLyricsButton').addEventListener('click', () => window.LX_LYRICS?.close());
 
+    $('pbCover').addEventListener('click', () => window.LX_LYRICS?.open());
     $('favToggleButton').addEventListener('click', () => {
       if (!A.state.current) return toast('还没有播放歌曲', 'warn');
       A.toggleFavorite(A.state.current);
     });
 
     $('downloadButton').addEventListener('click', () => {
-      if (!A.state.currentUrl) return toast('还没有可用的音频直链', 'warn');
-      window.open(A.state.currentUrl, '_blank', 'noopener');
+      if (!A.state.current) return toast('还没有播放歌曲', 'warn');
+      const song = A.state.current;
+      const quality = $('qualitySelect').value;
+      toast(`正在解析 ${quality} 直链…`, 'ok');
+      window.LX_AMMO.registry.resolveWithFallback(song.source, song.id, quality, {
+        id: song.id, source: song.source, name: song.name, artist: song.artist,
+        songmid: song.id, strMediaMid: song.strMediaMid || song.id, hash: song.id, type: quality,
+      }).then((result) => {
+        console.log('%c[LX download] 解析成功', 'color:#7fd6a0', { quality, url: result.url?.slice(0, 80) });
+        const a = document.createElement('a');
+        a.href = result.url;
+        a.download = `${song.name} - ${song.artist}.${quality.startsWith('flac') ? 'flac' : 'mp3'}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }).catch((error) => {
+        console.warn('%c[LX download] 解析失败', 'color:#e0af68', error.details || error.message);
+        toast(`下载解析失败：${error.message || error}`, 'err');
+      });
+    });
+
+    $('qualitySelect').addEventListener('change', () => {
+      const q = $('qualitySelect').value;
+      A.state.lastQuality = q;
+      console.log(`%c[LX play] 音质切换 → ${q}（下一首生效，或点封面旁重播）`, 'color:#c792ea');
     });
 
     const audio = $('audio');
@@ -591,6 +624,10 @@
       console.warn(`%c[LX play] audio 元素加载失败`, 'color:#ff5d73;font-weight:bold', { src: A.state.currentUrl.slice(0, 120), readyState: audio.readyState, networkState: audio.networkState, errorCode: audio.error?.code, errorMessage: audio.error?.message });
       toast('音频加载失败，尝试下一首', 'err');
       if (A.state.queue.length > 1) A.nextSong(true);
+    });
+    $('pdSeek').addEventListener('input', () => {
+      const dur = Number.isFinite(audio.duration) ? audio.duration : 0;
+      if (dur) audio.currentTime = (Number($('pdSeek').value) / 100) * dur;
     });
     $('seekBar').addEventListener('input', () => {
       const audio = $('audio');

@@ -179,7 +179,7 @@
       artist: raw.artist || raw.singer || raw.singerName || '未知歌手',
       album: raw.album || raw.albumName || '',
       duration: Number(raw.duration) || 0,
-      picture: raw.picture || raw.picUrl || raw.cover || '',
+      picture: String(raw.picture || raw.picUrl || raw.cover || '').replace(/^http:\/\//i, 'https://'),
       strMediaMid: raw.strMediaMid || '',
       songId: raw.songId ?? null,
       qualities: Array.isArray(raw.qualities) ? raw.qualities : [],
@@ -263,6 +263,13 @@
     $('pbArtist').textContent = song.artist + (song.album ? ` · ${song.album}` : '');
     const cover = $('pbCover');
     cover.innerHTML = song.picture ? `<img src="${esc(song.picture)}" alt="" onerror="this.parentNode.textContent='🎵'">` : '🎵';
+    // 播放大窗同步
+    const pdT = $('pdTitle'); const pdA = $('pdArtist'); const pdC = $('pdCover');
+    if (pdT) {
+      pdT.textContent = song.name;
+      pdA.textContent = song.artist + (song.album ? ` · ${song.album}` : '');
+      pdC.innerHTML = song.picture ? `<img src="${esc(song.picture)}" alt="" onerror="this.parentNode.textContent='🎵'">` : '🎵';
+    }
     const faved = state.favorites.some((f) => songKey(f) === songKey(song));
     const btn = $('favToggleButton');
     if (btn) {
@@ -489,6 +496,12 @@
     if (seek && dur) seek.value = String((audio.currentTime / dur) * 100);
     if (current) current.textContent = formatDuration(audio.currentTime) || '0:00';
     if (duration) duration.textContent = formatDuration(dur) || '0:00';
+    const pdSeek = $('pdSeek'); const pdCur = $('pdCurrent'); const pdDur = $('pdDuration');
+    if (pdSeek && document.querySelector('#lyricsPanel') && !document.getElementById('lyricsPanel').classList.contains('hidden')) {
+      pdSeek.value = $('seekBar').value;
+      if (pdCur) pdCur.textContent = $('pbCurrent').textContent;
+      if (pdDur) pdDur.textContent = $('pbDuration').textContent;
+    }
   }
 
   function syncPlayButton() {
