@@ -77,8 +77,6 @@ LX Music Web Shell 是一个与具体音源实现解耦的音乐搜索、解析�
 ```text
 搜索 / 歌词 / 歌单
    ↓ 先走浏览器直连
-   ├─ QQ      tang.api.s01s.cn        （开放 CORS）
-   ├─ 酷我    oiapi.net               （开放 CORS）
    ├─ 酷狗    songsearch.kugou.com
    ├─ 咪咕    pd.musicapp.migu.cn
    └─ 网易云  music.163.com           （国内浏览器直连可用）

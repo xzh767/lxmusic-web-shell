@@ -60,10 +60,10 @@
     pre = linearShade(isDark ? -0.35 : 1, toRgbString(pre));
     colors['--color-primary-light-1000'] = toRgbString(pre);
 
-    // alpha scales for the most-used stops (LX generates all; we generate on demand too)
-    const withAlpha = (name, rgb, steps = [100, 200, 300, 400, 500, 600, 700, 800, 900]) => {
+    // alpha scales (LX: RGB_Alpha_Shade(0.1 * j) → alpha-100 = 0.1 … alpha-1000 = 1.0)
+    const withAlpha = (name, rgb, steps = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]) => {
       steps.forEach((step) => {
-        colors[`${name}-alpha-${step}`] = toRgbaString(rgb, 1 - step / 1000);
+        colors[`${name}-alpha-${step}`] = toRgbaString(rgb, step / 1000);
       });
     };
     withAlpha('--color-primary', parseRgb(rgbaColor));

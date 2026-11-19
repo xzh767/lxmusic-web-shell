@@ -111,7 +111,6 @@ GET https://music-ammo-api-gateway.xlz767.dpdns.org/api/search.php?q=晴天&sour
 参数：`q`（或 `keyword`）、`source`（留空为全部平台聚合）、`page`、`limit`（≤30）。
 
 > ⚠️ 海外服务器 IP 会触发平台风控：网易云返回加密内容、QQ 匿名请求返回空列表。
-> 网关侧已加公开源兜底（tang / oiapi / songsearch / migu），但**网易云搜索在海外 IP 下仍不可用**——
 > 该平台搜索请在浏览器直连 `music.163.com`（国内网络可用），前端已按「浏览器直连优先」实现。
 
 ## 5. Lyric

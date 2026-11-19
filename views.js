@@ -22,34 +22,8 @@
    * refuses browser calls.
    */
   async function searchPlatform(platform, keyword, page) {
-    const client = window.LX_CLIENT_API;
-    if (client) {
-      const result = await client.search(platform, keyword, page, 30);
-      if (result.results.length) {
-        return { results: result.results, errors: result.errors, via: 'client' };
-      }
-      // client chain produced nothing -> try the gateway before giving up
-      try {
-        const params = new URLSearchParams({
-          q: keyword,
-          keyword,
-          source: platform || '',
-          page: String(page),
-          limit: '30',
-        });
-        const data = await window.LX_AMMO.fetchJsonWithRetry(`${GATEWAY_SEARCH_API}?${params.toString()}`, { cache: 'no-store' });
-        if (!data?.ok) throw new Error(data?.message || '搜索失败');
-        const results = Array.isArray(data.results) ? data.results : [];
-        if (results.length) {
-          // The gateway covered it; the client-side CORS failures are noise.
-          console.log(`%c[LX search] ${platform}: 浏览器直连失败 → 网关兜底成功 ${results.length} 条`, 'color:#7fd6a0', { clientErrors: result.errors });
-          return { results, errors: [], via: 'gateway' };
-        }
-      } catch (error) {
-        result.errors.push(`网关: ${error.message || error}`);
-      }
-      return { results: [], errors: result.errors, via: null };
-    }
+    // 搜索统一走网关：LX 官方接口（网易云 eapi / QQ zzc 签名）没有 CORS 头，
+    // 浏览器无法直连，只能由网关代跑。不依赖任何第三方聚合 API。
     const params = new URLSearchParams({
       q: keyword,
       keyword,
@@ -59,6 +33,7 @@
     });
     const data = await window.LX_AMMO.fetchJsonWithRetry(`${GATEWAY_SEARCH_API}?${params.toString()}`, { cache: 'no-store' });
     if (!data?.ok) throw new Error(data?.message || '搜索失败');
+    console.log(`%c[LX search] ${platform || '聚合'} 「${keyword}」→ ${(data.results || []).length} 条`, 'color:#7aa2ff');
     return { results: Array.isArray(data.results) ? data.results : [], errors: data.errors || [], via: 'gateway' };
   }
 
@@ -142,15 +117,31 @@
 
   /* ---------------- playlist ---------------- */
 
+  /** 从歌单链接里提取平台与 ID（纯本地正则）。 */
+  function identifyPlaylistUrl(url) {
+    const rules = [
+      [/music\.163\.com.*[?#&]id=(\d+)/i, 'wy'],
+      [/y\.qq\.com\/n\/ryqq\/playlist\/(\w+)/i, 'tx'],
+      [/i\.y\.qq\.com.*[?#&]id=(\d+)/i, 'tx'],
+      [/kugou\.com.*(?:specialid|listid)=(\d+)/i, 'kg'],
+      [/kuwo\.cn\/playlist_detail\/(\d+)/i, 'kw'],
+      [/music\.migu\.cn.*playlist\/(\d+)/i, 'mg'],
+    ];
+    for (const [re, source] of rules) {
+      const m = re.exec(url);
+      if (m) return { source, id: m[1] };
+    }
+    return null;
+  }
+
   async function openPlaylist() {
     const raw = $('playlistInput').value.trim();
     let platform = $('playlistPlatform').value;
     let id = raw;
 
-    // A pasted link can be identified locally; no network round-trip needed.
-    const client = window.LX_CLIENT_API;
-    if (client && /^https?:\/\//i.test(raw)) {
-      const identified = client.identifyPlaylistUrl ? client.identifyPlaylistUrl(raw) : null;
+    // 本地正则识别歌单链接，无需网络往返。
+    if (/^https?:\/\//i.test(raw)) {
+      const identified = identifyPlaylistUrl(raw);
       if (identified) {
         platform = identified.source;
         id = identified.id;

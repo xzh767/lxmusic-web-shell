@@ -45,20 +45,10 @@
   }
 
   /**
-   * Lyrics come from the browser first (client-api.js). The gateway lyric API
-   * is the fallback for platforms the browser cannot reach.
-   * gdSource: GD Studio source name carried from search results (_gd.gdSource).
+   * 歌词统一走网关：LX 官方接口（网易云 eapi / QQ fcgi / 酷狗 / 酷我）没有 CORS 头，
+   * 浏览器无法直连，由网关代跑。
    */
-  async function fetchLyric(source, id, gdSource) {
-    const client = window.LX_CLIENT_API;
-    if (client) {
-      try {
-        const result = await client.lyric(source, id, gdSource);
-        if (result?.lyric) return result.lyric;
-      } catch (error) {
-        console.warn(`%c[LX lyric] 客户端来源全部失败 → 网关兜底`, 'color:#e0af68', { platform: source, id, errors: error.message });
-      }
-    }
+  async function fetchLyric(source, id) {
     const url = `${LYRIC_API}${LYRIC_API.includes('?') ? '&' : '?'}source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`;
     console.log(`%c[LX lyric] GET 网关 ${source}/${id}`, 'color:#89ddff');
     const response = await fetch(url, { cache: 'no-store' });
@@ -133,7 +123,7 @@
    * Load lyrics for the given song; source/id come from the app layer.
    * autoOpen=false keeps the panel closed (used when a track starts playing).
    */
-  async function load(source, id, title, autoOpen = true, gdSource) {
+  async function load(source, id, title, autoOpen = true) {
     const key = `${source}:${id}`;
     if (key === state.currentSongKey) {
       if (autoOpen) open();
@@ -145,7 +135,7 @@
     if (autoOpen) open();
     render([], title || '加载中…');
     try {
-      const raw = await fetchLyric(source, id, gdSource);
+      const raw = await fetchLyric(source, id);
       state.lines = parseLrc(raw);
       console.log(`%c[LX lyric] 解析出 ${state.lines.length} 行`, 'color:#e0af68');
       render(state.lines, title);

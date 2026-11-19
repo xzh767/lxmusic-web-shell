@@ -516,65 +516,23 @@
     },
 
     /** Resolve through every enabled source, first success wins. */
-    /**
-     * Resolve through every enabled source, first success wins.
-     * A song carrying `_gd` metadata (GD Studio search results) can also be
-     * resolved browser-direct through GD Studio before/after the Ammo chain:
-     * pass options.gd = {source, br} to enable that leg.
-     */
     async resolveWithFallback(platform, id, quality, musicInfo, options = {}) {
-      const attempts = [];
-      if (options.gd) attempts.push('gd');
-      attempts.push('ammo');
-      if (options.gdAfterAmmo) attempts.push('gd');
-
       const errors = [];
-      let gdTried = false;
-      // Zero-ammo fallback: without any loaded source, try GD Studio for
-      // netease-matched songs; otherwise surface a clear hint.
-      if (!this.active().length && !options.gd) {
-        console.warn('%c[LX ammo] 未装载任何弹药，resolve 将依赖 GD Studio（仅 netease/joox）', 'color:#e0af68');
+      const candidates = this.active();
+      if (!candidates.length) {
+        console.warn('%c[LX ammo] 未装载任何弹药源，请到「源管理」装弹', 'color:#e0af68');
       }
-      for (const leg of attempts) {
-        if (leg === 'gd') {
-          // High bitrate first, stepping down when the source has no such
-          // quality for this track (joox often lacks hires).
-          const brMap = { '128k': 128, '192k': 192, '320k': 320, flac: 740, flac24bit: 999 };
-          const brSteps = [999, 740, 320, 192, 128];
-          const startIdx = Math.max(0, brSteps.indexOf(brMap[quality] || 320));
-          for (const br of brSteps.slice(startIdx)) {
-            try {
-              const result = await window.LX_CLIENT_API.gdUrl(
-                options.gd.gdSource,
-                options.gd.id || id,
-                br,
-              );
-              console.log(`%c[LX ammo] ✅ GD Studio(${options.gd.gdSource}) br=${br} 解析成功`, 'color:#7aa2ff', result.url?.slice(0, 80));
-              return { ...result, source: `GD Studio · ${options.gd.gdSource} · ${br >= 999 ? 'hires' : br >= 740 ? 'flac' : br + 'k'}` };
-            } catch (error) {
-              console.warn(`%c[LX ammo] ❌ GD Studio(${options.gd.gdSource}) br=${br}: ${error.message || error}`, 'color:#e0af68');
-              errors.push(`GD Studio br=${br}: ${error.message || error}`);
-            }
-          }
-          continue;
-        }
-        const candidates = this.active();
-        if (!candidates.length) {
-          errors.push('还没有装载任何弹药源。');
-          continue;
-        }
-        for (const source of candidates) {
-          try {
-            const result = await source.resolve(platform, id, quality, musicInfo);
-            console.log(`✅ [Ammo] ${source.name} 解析成功`, result);
-            return { ...result, source: source.name };
-          } catch (error) {
-            console.warn(`❌ [Ammo] ${source.name}: ${error.message || error}`);
-            errors.push(`${source.name}: ${error.message || error}`);
-          }
+      for (const source of candidates) {
+        try {
+          const result = await source.resolve(platform, id, quality, musicInfo);
+          console.log(`%c[LX ammo] ✅ ${source.name} 解析成功`, 'color:#7fd6a0', result);
+          return { ...result, source: source.name };
+        } catch (error) {
+          console.warn(`%c[LX ammo] ❌ ${source.name}: ${error.message || error}`, 'color:#e0af68');
+          errors.push(`${source.name}: ${error.message || error}`);
         }
       }
-      const error = new Error('所有解析途径均失败');
+      const error = new Error(candidates.length ? '所有解析途径均失败' : '还没有装载任何弹药源');
       error.details = errors;
       throw error;
     },

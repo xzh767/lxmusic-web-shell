@@ -14,7 +14,6 @@
     kw: '酷我',
     mg: '咪咕',
     bd: '百度',
-    joox: 'JOOX',
   };
   const QUALITY_ORDER = ['128k', '192k', '320k', 'flac', 'flac24bit'];
   const QUALITY_LABELS = { '128k': '128k', '192k': '192k', '320k': '320k', flac: 'FLAC', flac24bit: 'Hires' };
@@ -184,7 +183,6 @@
       strMediaMid: raw.strMediaMid || '',
       songId: raw.songId ?? null,
       qualities: Array.isArray(raw.qualities) ? raw.qualities : [],
-      _gd: raw._gd || null,
     };
   }
 
@@ -200,7 +198,7 @@
   async function playSong(song, options = {}) {
     if (!song) return;
     const t0 = performance.now();
-    dbg('play', `▶ 开始播放: ${song.name} · ${PLATFORM_NAMES[song.source] || song.source} (${song.source})`, { id: song.id, quality: state.lastQuality, hasGd: !!song._gd });
+    dbg('play', `▶ 开始播放: ${song.name} · ${PLATFORM_NAMES[song.source] || song.source} (${song.source})`, { id: song.id, quality: state.lastQuality });
 
     state.current = song;
     state.lastQuality = pickQuality(song);
@@ -210,8 +208,6 @@
     const registry = window.LX_AMMO?.registry;
     if (!registry) return;
     try {
-      // GD Studio 元数据的歌可以直接在浏览器里解析，不必经过任何服务器。
-      const gdMeta = song._gd ? { gdSource: song._gd.gdSource, id: song._gd.gdId || song.id } : null;
       const result = await registry.resolveWithFallback(
         song.source,
         song.id,
@@ -229,7 +225,6 @@
           copyrightId: song.id,
           type: state.lastQuality,
         },
-        gdMeta ? { gd: gdMeta } : {},
       );
       dbg('play', `✅ 解析成功 via ${result.source}`, { url: result.url?.slice(0, 100), ms: Math.round(performance.now() - t0) });
       state.currentUrl = result.url;
@@ -246,7 +241,7 @@
       showNotice('searchNotice', `✅ ${song.name} · 来自 ${result.source}`, 'success');
       if (window.LX_LYRICS) {
         // Load lyrics in the background; the panel only opens on user request.
-        window.LX_LYRICS.load(song.source, song.id, `${song.name} · ${song.artist}`, false, song._gd?.gdSource).catch(() => {});
+        window.LX_LYRICS.load(song.source, song.id, `${song.name} · ${song.artist}`, false).catch(() => {});
       }
       updateMediaSession(song);
       if (options.queue && !options.fromQueue) {
