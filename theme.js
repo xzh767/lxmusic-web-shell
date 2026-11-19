@@ -76,6 +76,10 @@
     withAlpha('--color-primary-light-1000', parseRgb(colors['--color-primary-light-1000']));
 
     colors['--color-theme'] = isDark ? colors['--color-primary-light-900'] : colors['--color-primary'];
+    // Colored-button text: pick black/white by primary luminance (WCAG contrast).
+    const pr = parseRgb(rgbaColor);
+    const lum = (0.2126 * pr[0] + 0.7152 * pr[1] + 0.0722 * pr[2]) / 255;
+    colors['--color-on-primary'] = lum > 0.55 ? 'rgb(24, 24, 24)' : 'rgb(255, 255, 255)';
 
     // font scale (LX createFontColors): from font color, -0.05 per step in dark mode
     const font = parseRgb(fontRgbaColor || (isDark ? 'rgb(229, 229, 229)' : 'rgb(33, 33, 33)'));
