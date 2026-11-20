@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#131313">
   <title>LX Music Web Shell</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🎵%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=20261120l">
+  <link rel="stylesheet" href="style.css?v=20261120m">
 </head>
 <body>
   <div class="app">
@@ -134,6 +134,17 @@
       </section>
 
       <section class="view" data-view="playlists">
+        <!-- 推荐歌单 -->
+        <div class="card">
+          <div class="hot-section">
+            <div class="hot-header-row">
+              <span class="hot-title">🔥 热门歌单（网易云）</span>
+            </div>
+            <div id="categoryTabs" class="category-tabs"></div>
+            <div id="hotPlaylistGrid" class="pl-grid"></div>
+            <button type="button" id="hotPlaylistMoreBtn" class="pl-page-btn hidden">加载更多</button>
+          </div>
+        </div>
         <div class="card">
           <div class="section-head">
             <div>
@@ -319,16 +330,16 @@
 
   <div id="toastBox" class="toast-box"></div>
 
-  <script src="theme.js?v=20261120l" defer></script>
-  <script src="sources.js?v=20261120l" defer></script>
-  <script src="lyrics.js?v=20261120l" defer></script>
-  <script src="app.js?v=20261120l" defer></script>
+  <script src="theme.js?v=20261120m" defer></script>
+  <script src="sources.js?v=20261120m" defer></script>
+  <script src="lyrics.js?v=20261120m" defer></script>
+  <script src="app.js?v=20261120m" defer></script>
   <!-- Auto-detecting edge CORS proxy — placed before views.js so proxy discovery
        completes before any search/lyric request is made. If no local proxy exists,
        requests silently fall back to the Ammo gateway (zero-config).
        Deploy proxy/netlify/functions/proxy.js or proxy/_functions/proxy/*.ts alongside
        this project for automatic detection on Netlify / CF Pages. -->
-  <script src="proxy/auto-proxy.js?v=20261120l" defer></script>
-  <script src="views.js?v=20261120l" defer></script>
+  <script src="proxy/auto-proxy.js?v=20261120m" defer></script>
+  <script src="views.js?v=20261120m" defer></script>
 </body>
 </html>

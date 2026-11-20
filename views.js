@@ -10,6 +10,25 @@
   const AMMO_BASE = 'https://music-ammo-api-gateway.xlz767.dpdns.org';
   const { $, esc, showNotice, hideNotice, toast } = A;
 
+  /* ── Hot playlist state ─────────────────────────────────────────────── */
+  const WY_CATEGORIES = [
+    { name: '全部', cat: '%E5%85%A8%E9%83%A8' },
+    { name: '流行', cat: '%E6%B5%81%E8%A1%8C' },
+    { name: '华语', cat: '%E5%8D%8E%E8%AF%AD' },
+    { name: '欧美', cat: '%E6%AC%A7%E7%BE%8E' },
+    { name: 'ACG', cat: 'ACG' },
+    { name: '摇滚', cat: '%E6%91%87%E6%BB%9A' },
+    { name: '民谣', cat: '%E6%B0%91%E4%B9%90' },
+    { name: '影视原声', cat: '%E5%BD%B1%E8%A7%86%E5%8E%9F%E5%A3%B0' },
+    { name: '深夜', cat: '%E6%B7%B1%E5%A4%9C' },
+    { name: '清晨', cat: '%E6%B8%85%E6%99%A8' },
+    { name: '怀旧', cat: '%E6%80%80%E6%97%A7' },
+    { name: '清新', cat: '%E6%B8%85%E6%96%B0' },
+    { name: '综艺', cat: '%E5%BA%86%E8%89%BA' },
+  ];
+  let _hotPage = 0;
+  const HOT_LIMIT = 30;
+
   /* ── Auto-detecting edge proxy (zero-config) ──────────────────────────────
    *
    * Auto-detection order (checked on first call):
@@ -662,6 +681,85 @@
     $('playlistInput').addEventListener('keydown', (event) => {
       if (event.key === 'Enter') openPlaylist();
     });
+
+    // ── Hot playlist UI ──────────────────────────────────────────────────
+    function renderHotCategories() {
+      const container = $('categoryTabs');
+      container.innerHTML = '';
+      WY_CATEGORIES.forEach((c, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cat-tab' + (i === 0 ? ' active' : '');
+        btn.textContent = c.name;
+        btn.addEventListener('click', () => {
+          container.querySelectorAll('.cat-tab').forEach((t) => t.classList.remove('active'));
+          btn.classList.add('active');
+          _hotPage = 0;
+          renderHotPlaylists(c.cat, _hotPage);
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    async function renderHotPlaylists(category, page) {
+      const grid = $('hotPlaylistGrid');
+      const moreBtn = $('hotPlaylistMoreBtn');
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">加载中…</div>';
+      moreBtn.classList.add('hidden');
+      try {
+        const params = new URLSearchParams();
+        params.set('type', 'hot');
+        params.set('source', 'wy');
+        params.set('cat', category);
+        params.set('page', String(page));
+        params.set('limit', String(HOT_LIMIT));
+        const data = await window.LX_AMMO.fetchJsonWithRetry(
+          `${AMMO_BASE}/api/playlist.php?${params.toString()}`,
+          { cache: 'no-store' },
+        );
+        if (!data?.ok || !data.playlists?.length) {
+          grid.innerHTML = '<div class="empty">暂无歌单</div>';
+          return;
+        }
+        grid.innerHTML = '';
+        for (const pl of data.playlists) {
+          const card = document.createElement('div');
+          card.className = 'pl-card';
+          const cover = pl.cover || '';
+          const thumb = cover.includes('http://') ? cover.replace('http://', 'https://') : cover;
+          card.innerHTML = `
+            <img class="pl-card-cover" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">
+            <div class="pl-card-info">
+              <div class="pl-card-title">${esc(pl.title)}</div>
+              <div class="pl-card-meta">${esc(pl.creator || '')} · ${pl.trackCount ?? '?'} 首</div>
+            </div>`;
+          card.addEventListener('click', () => openPlaylistById(pl.source, pl.id));
+          grid.appendChild(card);
+        }
+        // Show "load more" if there are more pages
+        if ((page + 1) * HOT_LIMIT < (data.total || 0)) {
+          moreBtn.classList.remove('hidden');
+          moreBtn.disabled = false;
+          moreBtn.textContent = '加载更多';
+          moreBtn.onclick = () => {
+            _hotPage++;
+            renderHotPlaylists(category, _hotPage);
+          };
+        }
+      } catch (err) {
+        grid.innerHTML = `<div class="empty">加载失败：${esc(err.message)}</div>`;
+        console.error('[热门歌单] 失败', err);
+      }
+    }
+
+    function openPlaylistById(source, id) {
+      $('playlistPlatform').value = source;
+      $('playlistInput').value = id;
+      openPlaylist();
+    }
+
+    renderHotCategories();
+    renderHotPlaylists(WY_CATEGORIES[0].cat, 0);
 
     $('loadAmmoButton').addEventListener('click', loadManifest);
     $('lxLoadButton').addEventListener('click', () => loadLxScriptFromFile($('lxSourceFile').files[0]));
