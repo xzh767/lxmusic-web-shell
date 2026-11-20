@@ -419,6 +419,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   display: flex; align-items: center; gap: 10px;
   padding: 4px 0 8px; margin-bottom: 8px;
   border-bottom: 1px solid var(--color-primary-alpha-100, rgba(255,255,255,.08));
+  flex-shrink: 0;
 }
 .pd-topbar strong { font-size: 15px; }
 .pd-spacer { flex: 1; }
@@ -428,9 +429,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   grid-template-columns: minmax(180px, 40%) 1fr;
   gap: 18px;
   padding-bottom: 12px;
-  overflow-y: auto;
+  /* No overflow here — lyrics-content handles its own scrolling */
 }
-.pd-left { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 4px; }
+.pd-left {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding-top: 4px;
+  overflow-y: auto;
+  max-height: 100%;
+}
 .pd-cover {
   width: min(240px, 65%);
   aspect-ratio: 1/1;
@@ -469,6 +475,51 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .pd-body { grid-template-columns: 1fr; }
   .pd-cover { width: min(160px, 48%); }
 }
+/* Player bar & detail panel icon buttons — SVG circular style */
+#playerbar .icon-button,
+.pd-topbar .icon-button,
+.pd-progress .icon-button {
+  position: relative;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: none; background: transparent;
+  color: var(--color-font-700);
+  cursor: pointer;
+  transition: background-color .15s, color .15s;
+  padding: 0;
+}
+#playerbar .icon-button svg,
+.pd-topbar .icon-button svg { width: 16px; height: 16px; fill: currentColor; }
+#playerbar .icon-button:hover:not(:disabled),
+.pd-topbar .icon-button:hover:not(:disabled) {
+  background: var(--color-primary-alpha-200, rgba(255,255,255,.1));
+  color: var(--color-font);
+}
+#playerbar .icon-button:active:not(:disabled),
+.pd-topbar .icon-button:active:not(:disabled) {
+  background: var(--color-primary-alpha-300, rgba(255,255,255,.15));
+}
+#playerbar .icon-button:disabled,
+.pd-topbar .icon-button:disabled { opacity: .35; cursor: default; }
+#playerbar .icon-button.active,
+.pd-topbar .icon-button.active { color: var(--color-primary); }
+#playerbar .icon-button.active:hover:not(:disabled),
+.pd-topbar .icon-button.active:hover:not(:disabled) {
+  color: var(--color-primary);
+  background: var(--color-primary-alpha-200, rgba(255,255,255,.12));
+}
+
+/* Play toggle — filled circle, larger */
+#playerbar .play-toggle {
+  width: 36px; height: 36px;
+  background: var(--color-primary-alpha-300, rgba(255,255,255,.12));
+  color: var(--color-font);
+}
+#playerbar .play-toggle:hover:not(:disabled) { background: var(--color-primary-alpha-400, rgba(255,255,255,.18)); }
+#playerbar .play-toggle svg { width: 18px; height: 18px; }
+.pd-topbar .play-toggle { width: 28px; height: 28px; }
+.pd-topbar .play-toggle svg { width: 14px; height: 14px; }
 
 /* ============ theme picker ============ */
 .theme-menu {
@@ -553,3 +604,31 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 /* ---- platform tabs (LX search) ---- */
 .platform-tabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 .platform-tabs .tab { flex: none; }
+
+
+/* ---- range input cross-browser cleanup ---- */
+input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  background: var(--color-primary-alpha-300, rgba(255,255,255,.2));
+  border-radius: 2px; height: 4px; cursor: pointer;
+}
+input[type="range"]:hover { background: var(--color-primary-alpha-400, rgba(255,255,255,.3)); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--color-font); cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px; height: 12px; border: none;
+  border-radius: 50%; background: var(--color-font); cursor: pointer;
+}
+
+/* ---- mobile player-detail ---- */
+@media (max-width: 700px) {
+  .pd-body { gap: 12px; }
+  .pd-cover { width: min(140px, 40%); }
+  .pd-meta strong { font-size: 13px; }
+  .pb-left .pb-cover { display: none; }
+  .pb-right .vol-wrap svg { display: none; }
+  /* Prevent main content from being hidden behind fixed toolbar */
+  .toolbar { top: env(safe-area-inset-top, 0); }
+}

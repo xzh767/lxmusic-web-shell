@@ -18,9 +18,9 @@
   const QUALITY_ORDER = ['128k', '192k', '320k', 'flac', 'flac24bit'];
   const QUALITY_LABELS = { '128k': '128k', '192k': '192k', '320k': '320k', flac: 'FLAC', flac24bit: 'Hires' };
   const PLAY_MODES = [
-    { id: 'list', icon: '🔁', label: '列表循环' },
-    { id: 'single', icon: '🔂', label: '单曲循环' },
-    { id: 'shuffle', icon: '🔀', label: '随机播放' },
+    { id: 'list', iconPath: '<path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm14 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4z"/>', label: '列表循环' },
+    { id: 'single', iconPath: '<path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm14 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM9 14v2h2v-2H9z"/>', label: '单曲循环' },
+    { id: 'shuffle', iconPath: '<path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>', label: '随机播放' },
   ];
 
   const KEYS = {
@@ -481,7 +481,8 @@
     const config = PLAY_MODES.find((item) => item.id === mode) || PLAY_MODES[0];
     const button = $('playModeButton');
     if (button) {
-      button.textContent = config.icon;
+      const iconEl = $('playModeIcon');
+      if (iconEl) iconEl.innerHTML = config.iconPath;
       button.title = `播放模式：${config.label}`;
       button.classList.toggle('active', mode !== 'list');
     }
@@ -511,9 +512,12 @@
 
   function syncPlayButton() {
     const audio = $('audio');
-    const button = $('playButton');
-    if (!audio || !button) return;
-    button.textContent = audio.paused ? '▶' : '⏸';
+    const icon = $('playIcon');
+    if (!icon) return;
+    // Swap SVG path: ▶ → ⏸
+    icon.innerHTML = audio.paused
+      ? '<path d="M8 5v14l11-7z"/>'
+      : '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
   }
 
   function switchView(view) {
