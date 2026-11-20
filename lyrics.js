@@ -21,9 +21,24 @@
       .replaceAll("'", '&#039;');
   }
 
-  /** Parse LRC text into [{time, text}]. Supports [mm:ss.xx] and [mm:ss:xx]. */
+  /** Parse lyric text into [{time, text}].
+   *  Supports two formats:
+   *    1. Standard LRC: [mm:ss.xx]text or [mm:ss:xx]text
+   *    2. NetEase JSON Lines: {"t":ms,"c":[{tx:"text"},...]} per line
+   */
   function parseLrc(raw) {
-    const text = String(raw || '');
+    const text = String(raw || '').trim();
+    if (!text) return [];
+
+    // Detect JSON format (first non-empty line starts with '{')
+    const firstLine = text.split(/\r?\n/).find(l => l.trim());
+    if (firstLine && firstLine.startsWith('{')) {
+      return parseJsonLyrics(text);
+    }
+    return parseLrcStandard(text);
+  }
+
+  function parseLrcStandard(text) {
     const lines = [];
     const tagRe = /\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
     for (const rawLine of text.split(/\r?\n/)) {
@@ -39,6 +54,25 @@
       if (!stamps.length) continue;
       const content = rawLine.replace(tagRe, '').trim();
       for (const time of stamps) lines.push({ time, text: content });
+    }
+    lines.sort((a, b) => a.time - b.time);
+    return lines;
+  }
+
+  function parseJsonLyrics(text) {
+    const lines = [];
+    for (const rawLine of text.split(/\r?\n/)) {
+      const trimmed = rawLine.trim();
+      if (!trimmed || !trimmed.startsWith('{')) continue;
+      try {
+        const obj = JSON.parse(trimmed);
+        const timeSec = (obj.t || 0) / 1000;
+        const texts = (obj.c || [])
+          .map(item => item.tx || '')
+          .filter(Boolean)
+          .join('');
+        if (texts) lines.push({ time: timeSec, text: texts });
+      } catch { /* skip malformed lines */ }
     }
     lines.sort((a, b) => a.time - b.time);
     return lines;
