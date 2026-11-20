@@ -265,6 +265,23 @@
     }
   }
 
+  /** Resolve a song's audio URL via Ammo and add it to the queue. */
+  async function resolveAndPush(song) {
+    const registry = window.LX_AMMO?.registry;
+    if (!registry) throw new Error('Ammo 未初始化');
+    const result = await registry.resolveWithFallback(
+      song.source, song.id, state.lastQuality,
+      { id: song.id, source: song.source, name: song.name, artist: song.artist },
+    );
+    const normalized = A.normalizeSong({ ...song, url: result.url });
+    if (!normalized) throw new Error('歌曲格式无效');
+    // Append to end of queue
+    state.queue.push(normalized);
+    saveQueue();
+    renderQueue();
+    return normalized;
+  }
+
   function updatePlayerBar(song) {
     $('pbTitle').textContent = song.name;
     $('pbArtist').textContent = song.artist + (song.album ? ` · ${song.album}` : '');
@@ -384,6 +401,7 @@
           </div>
           <div class="result-actions">
             <button type="button" class="mini-button ${faved ? 'fav-on' : ''}" data-fav-index="${index}">${faved ? '★' : '☆'}</button>
+            ${options.showPushButton ? `<button type="button" class="push-button" data-push-index="${index}" title="推送至队列">➕</button>` : ''}
             <button type="button" class="use-button" data-play-index="${index}">${isPlaying ? '播放中' : '播放'}</button>
           </div>
         </article>`;
@@ -395,6 +413,28 @@
         if (song) playSong(song, { queue: items.map(normalizeSong).filter(Boolean) });
       });
     });
+    // Push-to-queue handler (used by playlist view only; options.showPushButton must be true)
+    if (options.showPushButton) {
+      box.querySelectorAll('[data-push-index]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const idx = Number(button.dataset.pushIndex);
+          const song = normalizeSong(items[idx]);
+          if (!song) return;
+          button.disabled = true;
+          button.textContent = '⏳';
+          try {
+            await A.resolveAndPush(song);
+            toast(`已推送：${song.name}`, 'ok');
+          } catch (err) {
+            console.error('[推送] 失败', err);
+            toast(`推送失败：${err.message}`, 'error');
+          } finally {
+            button.disabled = false;
+            button.textContent = '➕';
+          }
+        });
+      });
+    }
     box.querySelectorAll('[data-fav-index]').forEach((button) => {
       button.addEventListener('click', () => {
         const song = normalizeSong(items[Number(button.dataset.favIndex)]);

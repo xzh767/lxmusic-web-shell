@@ -1,8 +1,2 @@
 [build]
 functions = "netlify/functions"
-
-[[redirects]]
-  from = "/.netlify/functions/proxy/*"
-  to = "/.netlify/functions/proxy/:splat"
-  status = 200
-  force = true

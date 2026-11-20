@@ -301,62 +301,63 @@
     $('playlistResults').innerHTML = '<div class="empty">正在读取歌单…</div>';
     $('playlistSummary').classList.add('hidden');
 
-    let payload = null;
-    let via = '';
-
-    // 1) browser direct
-    if (client) {
-      try {
-        const result = await client.playlist(platform, id);
-        if (result?.tracks?.length) {
-          payload = { playlist: result.playlist, tracks: result.tracks };
-          via = '浏览器直连';
-        }
-      } catch (error) {
-        console.warn('[歌单] 浏览器直连失败，改用网关', error);
-      }
-    }
-
-    // 2) gateway
-    if (!payload) {
-      try {
-        const params = new URLSearchParams();
-        params.set('source', platform);
-        params.set('id', id);
-        const data = await window.LX_AMMO.fetchJsonWithRetry(`${PLAYLIST_API}?${params.toString()}`, { cache: 'no-store' });
-        if (!data?.ok) throw new Error(data?.message || '歌单读取失败');
-        payload = { playlist: data.playlist || {}, tracks: data.tracks || [] };
-        via = '网关';
-      } catch (error) {
-        showNotice('playlistNotice', error.message || '歌单读取失败', 'error');
-        $('playlistResults').innerHTML = '';
-        console.error('[歌单] 失败', error);
-        $('openPlaylistButton').disabled = false;
-        return;
-      }
-    }
-
     try {
-      const tracks = (payload.tracks || []).map(A.normalizeSong).filter(Boolean);
-      const meta = payload.playlist || {};
+      const params = new URLSearchParams();
+      params.set('source', platform);
+      params.set('id', id);
+      const data = await window.LX_AMMO.fetchJsonWithRetry(
+        `${AMMO_BASE}/api/playlist.php?${params.toString()}`,
+        { cache: 'no-store' },
+      );
+      if (!data?.ok) throw new Error(data?.message || '歌单读取失败');
+      const tracks = (data.tracks || []).map(A.normalizeSong).filter(Boolean);
+      const meta = data.playlist || {};
 
       $('playlistSummary').classList.remove('hidden');
       $('playlistSummary').innerHTML = `
         <div class="pl-copy">
           <strong>${esc(meta.title || id)}</strong>
-          <span>${esc(meta.creator || '')}${meta.source ? ` · ${esc(A.PLATFORM_NAMES[meta.source] || meta.source)}` : ''} · ${tracks.length} 首${via ? ` · ${esc(via)}` : ''}</span>
+          <span>${esc(meta.creator || '')}${meta.source ? ` · ${esc(A.PLATFORM_NAMES[meta.source] || meta.source)}` : ''} · ${tracks.length} 首</span>
         </div>
         <div class="head-actions">
           <button type="button" class="secondary-button" id="playlistPlayAll">▶ 全部播放</button>
+          <button type="button" class="ghost-button" id="playlistPushAll">➕ 推送到队列</button>
           <button type="button" class="ghost-button" id="playlistSave">💾 保存</button>
         </div>`;
-      $('playlistPlayAll').addEventListener('click', () => {
-        A.state.queue = tracks;
+
+      // ▶ 全部播放：直接入队并开始播放（歌曲需先解析音频）
+      $('playlistPlayAll').addEventListener('click', async () => {
+        if (!tracks.length) return toast('歌单为空', 'warn');
+        A.state.queue = [...tracks];
         A.state.queueIndex = 0;
         A.saveQueue();
         A.renderQueue();
+        toast(`已加入队列 ${tracks.length} 首，开始播放`, 'ok');
         if (tracks.length) A.playSong(tracks[0], { fromQueue: true });
       });
+
+      // ➕ 推送到队列：将所有曲目推入队列（逐首解析）
+      $('playlistPushAll').addEventListener('click', async () => {
+        if (!tracks.length) return toast('歌单为空', 'warn');
+        const btn = $('playlistPushAll');
+        btn.disabled = true;
+        btn.textContent = '⏳ 推送中…';
+        let ok = 0, fail = 0;
+        for (const song of tracks) {
+          try {
+            await A.resolveAndPush(song);
+            ok++;
+          } catch {
+            fail++;
+          }
+        }
+        btn.disabled = false;
+        btn.textContent = '➕ 推送到队列';
+        toast(fail ? `推送完成：✅ ${ok} 首 · ❌ ${fail} 首失败` : `已推送 ${ok} 首到队列`, fail ? 'warning' : 'ok');
+        A.renderQueue();
+      });
+
+      // 💾 保存歌单
       $('playlistSave').addEventListener('click', () => {
         const entry = { id: meta.id || id, source: meta.source || platform, title: meta.title || id, url: raw };
         if (!A.state.savedPlaylists.some((item) => item.id === entry.id && item.source === entry.source)) {
@@ -369,8 +370,12 @@
         }
       });
 
-      A.renderResults('playlistResults', tracks, { emptyText: '该歌单没有可用的曲目。' });
-      showNotice('playlistNotice', `已载入 ${tracks.length} 首${via ? ` · ${via}` : ''}`, 'success');
+      A.renderResults('playlistResults', tracks, { emptyText: '该歌单没有可用的曲目。', showPushButton: true });
+      showNotice('playlistNotice', `已载入 ${tracks.length} 首`, 'success');
+    } catch (error) {
+      showNotice('playlistNotice', error.message || '歌单读取失败', 'error');
+      $('playlistResults').innerHTML = '';
+      console.error('[歌单] 失败', error);
     } finally {
       $('openPlaylistButton').disabled = false;
     }

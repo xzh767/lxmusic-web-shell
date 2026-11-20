@@ -285,6 +285,23 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .result-copy small { color: var(--color-font-500); font-size: 11px; }
 
 .result-actions { display: flex; gap: 4px; flex: none; }
+.push-button {
+  background: transparent;
+  border: 1px solid var(--color-primary-alpha-300, rgba(255,255,255,.15));
+  color: var(--color-font-600);
+  font-size: 12px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-border, 4px);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.push-button:hover { background: var(--color-primary-alpha-100, rgba(255,255,255,.08)); color: var(--color-accent, #7aa2ff); }
+.push-button:disabled { opacity: .5; cursor: wait; }
 .use-button, .mini-button {
   background: transparent;
   border: 1px solid var(--color-primary-alpha-300, rgba(255,255,255,.15));
