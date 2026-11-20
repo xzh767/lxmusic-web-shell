@@ -200,6 +200,14 @@
     const t0 = performance.now();
     dbg('play', `▶ 开始播放: ${song.name} · ${PLATFORM_NAMES[song.source] || song.source} (${song.source})`, { id: song.id, quality: state.lastQuality });
 
+    // Immediately reset playback state so the UI reflects the new song right away;
+    // the resolver is async — we do NOT want the old track continuing to play while
+    // we wait for a URL. Pause+reset now, update after resolve succeeds.
+    const audio = $('audio');
+    try { audio.pause(); } catch {}
+    audio.removeAttribute('src');
+    audio.load();
+    state.currentUrl = '';
     state.current = song;
     state.lastQuality = pickQuality(song);
     updatePlayerBar(song);
@@ -228,7 +236,6 @@
       );
       dbg('play', `✅ 解析成功 via ${result.source}`, { url: result.url?.slice(0, 100), ms: Math.round(performance.now() - t0) });
       state.currentUrl = result.url;
-      const audio = $('audio');
       audio.src = result.url;
       audio.volume = state.volume;
       audio.play().catch((error) => {
