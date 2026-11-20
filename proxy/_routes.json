@@ -1,3 +1,0 @@
-[
-  { "path": "/proxy/*", "function": "proxy" }
-]

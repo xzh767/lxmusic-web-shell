@@ -11,18 +11,10 @@
   const LX_APP = window.LX_APP;
   const $ = (id) => LX_APP ? LX_APP.$(id) : document.getElementById(id);
 
-  /* ── Proxy-aware lyric fetcher ───────────────────────────────────────────
-   *
-   * Architecture mirrors views.js searchPlatform:
-   *   Tier 1 – Browser direct   : try native API first (will hit CORS on most platforms)
-   *   Tier 2 – User edge proxy  : if window.LX_WEB_SHELL_CORS_PROXY is set, route through it
-   *   Tier 3 – Ammo gateway     : last resort fallback
-   *
-   * Note: Ammo's lyric API normalises all platforms into a single response format
-   * ({ok, lyric:"[LRC text]"}) which parseLrc() handles natively.
-   * Direct calls bypass this normalisation and return platform-specific formats
-   * (LRC text or JSON Lines), both supported by parseLrc().
+  /* ── Auto-detecting edge proxy (zero-config) ──────────────────────────────
+   * Mirror of views.js proxy system — shared PROXY_AUTO_DETECT singleton.
    */
+  const PROXY_AUTO_DETECT = window.__LX_PROXY__;
 
   const state = { lines: [], activeIndex: -1, url: '', currentSongKey: '' };
   function esc(value) {
@@ -111,8 +103,11 @@
       console.info(`%c[LX lyric] 直连失败 ${source} (${err.message})`, 'color:#89ddff');
     }
 
-    // ── Tier 2: user edge proxy ─────────────────────────────────────────────
-    const proxyBaseUrl = window.LX_WEB_SHELL_CORS_PROXY;
+    // ── Tier 2: auto-detected CORS proxy ─────────────────────────────────────
+    let proxyBaseUrl = null;
+    if (PROXY_AUTO_DETECT) {
+      try { proxyBaseUrl = await PROXY_AUTO_DETECT.resolve(); } catch {}
+    }
     if (proxyBaseUrl) {
       try {
         console.log(`%c[LX lyric] 经边缘代理获取 ${source}/${id}`, 'color:#e0af68');

@@ -1,20 +1,20 @@
-// Netlify Function — minimal CORS proxy
-// Deploy: put this in netlify/functions/proxy.js alongside netlify.toml
-// See proxy/README.md for full instructions.
+// Netlify Function — CORS proxy
+// Auto-mounted at /.netlify/functions/proxy by netlify.toml
+// See proxy/README.md for details.
 
 const ALLOWED_HOSTS = new Set([
-  'interface.music.163.com',
-  'u.y.qq.com',
-  'songsearch.kugou.com',
+  'interface.music.163.com', 'music.163.com',
+  'u.y.qq.com', 'c.y.qq.com',
+  'songsearch.kugou.com', 'mplayer.kugou.com', 'krcs.kugou.com',
   'www.kuwo.cn',
-  'app.c.nf.migu.cn',
+  'app.c.nf.migu.cn', 'cscs.migu.cn',
 ]);
 
 async function proxyRequest(event, context) {
   const url = new URL(event.rawUrl || `http://local${event.path}`);
   let targetUrl = url.searchParams.get('url');
 
-  // Path-based fallback
+  // Path-based fallback: /.netlify/functions/proxy/<encoded_url>
   if (!targetUrl) {
     const parts = url.pathname.split('/').filter(Boolean);
     const proxyIdx = parts.indexOf('proxy');
@@ -24,12 +24,12 @@ async function proxyRequest(event, context) {
   }
 
   if (!targetUrl) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Missing ?url=' }) };
+    return { statusCode: 400, body: JSON.stringify({ error: 'Missing target URL' }) };
   }
 
   let parsed;
   try { parsed = new URL(targetUrl); } catch {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid URL' }) };
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid target URL' }) };
   }
 
   if (!ALLOWED_HOSTS.has(parsed.hostname)) {
@@ -42,7 +42,6 @@ async function proxyRequest(event, context) {
       headers: { ...event.headers, host: parsed.hostname },
       body: event.httpMethod === 'POST' ? event.body : undefined,
     });
-
     const body = await resp.text();
     return {
       statusCode: resp.status,

@@ -1,16 +1,17 @@
-// Cloudflare Pages Function — minimal CORS proxy
-// Deploy: copy this file to _functions/proxy/[...proxy].ts
-// Then add _routes.json: [{"path":"/proxy/*","function":"proxy"}]
+// Cloudflare Pages / Workers — minimal CORS proxy
+// Auto-routed via _routes.json (see repo root)
+// Deployed automatically when pushed to a CF Pages project.
+import type { PagesFunction } from '@cloudflare/workers-types';
 
 const ALLOWED_HOSTS = new Set([
-  'interface.music.163.com',
-  'u.y.qq.com',
-  'songsearch.kugou.com',
+  'interface.music.163.com', 'music.163.com',
+  'u.y.qq.com', 'c.y.qq.com',
+  'songsearch.kugou.com', 'mplayer.kugou.com', 'krcs.kugou.com',
   'www.kuwo.cn',
-  'app.c.nf.migu.cn',
+  'app.c.nf.migu.cn', 'cscs.migu.cn',
 ]);
 
-export const onRequest: PagesFunction = async ({ request, env }) => {
+export const onRequest: PagesFunction = async ({ request }) => {
   const url = new URL(request.url);
   let targetUrl = url.searchParams.get('url');
 
@@ -24,12 +25,12 @@ export const onRequest: PagesFunction = async ({ request, env }) => {
   }
 
   if (!targetUrl) {
-    return Response.json({ error: 'Missing ?url=' }, { status: 400 });
+    return Response.json({ error: 'Missing target URL' }, { status: 400 });
   }
 
   let parsed: URL;
   try { parsed = new URL(targetUrl); } catch {
-    return Response.json({ error: 'Invalid URL' }, { status: 400 });
+    return Response.json({ error: 'Invalid target URL' }, { status: 400 });
   }
 
   if (!ALLOWED_HOSTS.has(parsed.hostname)) {
@@ -42,17 +43,11 @@ export const onRequest: PagesFunction = async ({ request, env }) => {
       headers: Object.fromEntries(request.headers.entries()),
       body: request.method === 'POST' ? await request.text() : undefined,
     });
-
     const headers = new Headers(response.headers);
     headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Cache-Control', 'no-cache');
-
-    return new Response(response.body, {
-      status: response.status,
-      headers,
-    });
+    return new Response(response.body, { status: response.status, headers });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return Response.json({ error: `Upstream error: ${message}` }, { status: 502 });
+    return Response.json({ error: `Upstream: ${message}` }, { status: 502 });
   }
 };

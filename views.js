@@ -10,29 +10,21 @@
   const AMMO_BASE = 'https://music-ammo-api-gateway.xlz767.dpdns.org';
   const { $, esc, showNotice, hideNotice, toast } = A;
 
-  /* ── Proxy-aware fetch helpers ───────────────────────────────────────────
+  /* ── Auto-detecting edge proxy (zero-config) ──────────────────────────────
    *
-   * Architecture (3-tier):
-   *   Tier 1 – Browser direct   : zero-latency, bypasses author infra.
-   *                                Only succeeds where upstream sends CORS
-   *                                headers (rare; most music platforms block).
-   *   Tier 2 – User edge proxy  : when window.LX_WEB_SHELL_CORS_PROXY is set.
-   *                                Runs on the SAME origin the user deploys
-   *                                to (Netlify / CF Pages / Vercel / own VPS),
-   *                                adds CORS headers server-side, no latency
-   *                                penalty vs. Ammo.  PRIMARY PATH after v20261120i.
-   *   Tier 3 – Ammo gateway     : LAST RESORT.  Author's server proxies the
-   *                                request and forwards it.  Works everywhere
-   *                                but adds ~1 round-trip and depends on a
-   *                                single host.
+   * Auto-detection order (checked on first call):
+   *   1. window.LX_WEB_SHELL_CORS_PROXY   ← manual override
+   *   2. /.netlify/functions/proxy        ← Netlify Functions (auto-discovered)
+   *   3. /proxy                           ← CF Pages / Vercel / generic serverless
    *
-   * Configure (place <script> BEFORE other LX scripts in index.html):
-   *   window.LX_WEB_SHELL_CORS_PROXY = "https://your-proxy.example.com/proxy"
+   * Once discovered, the proxy base URL is cached for all subsequent calls.
+   * If no proxy is found, Tier 2 is silently skipped and Ammo becomes fallback.
    *
-   * See proxy/README.md for deployment guides (CF Pages / Netlify / Vercel).
+   * Zero-config deployment: just place proxy/netlify/functions/proxy.js (Netlify)
+   * or proxy/_functions/proxy/[...proxy].ts + _routes.json (CF Pages) in your repo.
    */
+  const PROXY_AUTO_DETECT = window.__LX_PROXY__; // injected by proxy/auto-proxy.js
 
-  /* ---------------- search ---------------- */
 
 
   /**
@@ -57,8 +49,11 @@
       console.info(`%c[LX search] ${platform} 直连失败 (${err.message})`, 'color:#89ddff');
     }
 
-    // ── Tier 2: user-configured CORS proxy ───────────────────────────────────
-    const proxyBaseUrl = window.LX_WEB_SHELL_CORS_PROXY;
+    // ── Tier 2: auto-detected CORS proxy ─────────────────────────────────────
+    let proxyBaseUrl = null;
+    if (PROXY_AUTO_DETECT) {
+      try { proxyBaseUrl = await PROXY_AUTO_DETECT.resolve(); } catch {}
+    }
     if (proxyBaseUrl) {
       try {
         console.log(`%c[LX search] 经边缘代理请求 ${platform}`, 'color:#e0af68');
