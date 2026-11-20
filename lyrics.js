@@ -58,9 +58,9 @@
   }
 
   function render(lines, title) {
-    const box = $('lyricsContent');
+    const box = $('pdLyricsContent');
     if (!box) return;
-    $('lyricsTitle').textContent = title || '歌词';
+    $('pdTopTitle').textContent = title || '歌词';
     if (!lines.length) {
       box.innerHTML = '<div class="lyric-empty">暂无歌词</div>';
       return;
@@ -90,7 +90,7 @@
     }
     if (index === state.activeIndex) return;
     state.activeIndex = index;
-    const box = $('lyricsContent');
+    const box = $('pdLyricsContent');
     if (!box) return;
     box.querySelectorAll('.lyric-line.active').forEach((el) => el.classList.remove('active'));
     const el = box.querySelector(`.lyric-line[data-index="${index}"]`);
@@ -101,22 +101,22 @@
   }
 
   function open() {
-    const panel = $('lyricsPanel');
-    if (!panel) return;
-    panel.classList.remove('hidden');
-    panel.setAttribute('aria-hidden', 'false');
+    const pd = $('playerDetail');
+    if (!pd) return;
+    pd.classList.add('active');
+    pd.removeAttribute('aria-hidden');
   }
 
   function close() {
-    const panel = $('lyricsPanel');
-    if (!panel) return;
-    panel.classList.add('hidden');
-    panel.setAttribute('aria-hidden', 'true');
+    const pd = $('playerDetail');
+    if (!pd) return;
+    pd.classList.remove('active');
+    pd.setAttribute('aria-hidden', 'true');
   }
 
   function isOpen() {
-    const panel = $('lyricsPanel');
-    return panel && !panel.classList.contains('hidden');
+    const pd = $('playerDetail');
+    return pd?.classList.contains('active');
   }
 
   /**
@@ -142,15 +142,15 @@
     } catch (error) {
       console.warn('[歌词] 读取失败', error);
       render([], title);
-      const box = $('lyricsContent');
+      const box = $('pdLyricsContent');
       if (box) box.innerHTML = `<div class="lyric-empty">${esc(error.message || '歌词不可用')}</div>`;
     }
   }
 
   function init() {
-    $('closeLyricsButton')?.addEventListener('click', close);
-    $('lyricsPanel')?.addEventListener('click', (event) => {
-      if (event.target === $('lyricsPanel')) close();
+    $('pdBackBtn')?.addEventListener('click', close);
+    $('playerDetail')?.addEventListener('click', (event) => {
+      if (event.target === $('playerDetail')) close();
     });
     const audio = $('audio');
     if (audio) {

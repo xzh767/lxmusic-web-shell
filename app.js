@@ -565,10 +565,14 @@
     const audio = $('audio');
     if (seek && audio) {
       seek.value = audio.currentTime;
-      seek.addEventListener('input', () => {
-        const dur = audio.duration || 1;
-        audio.currentTime = (Number(seek.value) / 100) * dur;
-      });
+      seek.max = String(audio.duration || 100);
+      // Use a stable handler — detach before reattach to avoid stacking
+      seek.removeEventListener('input', seek._pdHandler);
+      seek._pdHandler = () => {
+        if (!audio.duration) return;
+        audio.currentTime = (Number(seek.value) / Number(seek.max)) * audio.duration;
+      };
+      seek.addEventListener('input', seek._pdHandler);
     }
   }
 
