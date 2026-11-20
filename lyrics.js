@@ -44,6 +44,16 @@
     return lines;
   }
 
+  /** Fetch LRC text from Ammo gateway lyric API. Gateway adds CORS headers automatically. */
+  async function fetchLyric(source, id) {
+    const url = `${LYRIC_API}${LYRIC_API.includes('?') ? '&' : '?'}source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`;
+    console.log(`%c[LX lyric] GET 网关 ${source}/${id}`, 'color:#89ddff');
+    const response = await fetch(url, { cache: 'no-store' });
+    const data = await response.json().catch(() => null);
+    if (!data?.ok) throw new Error(data?.message || '歌词暂不可用');
+    return data.lyric || '';
+  }
+
   /** Highlight the lyric line closest to currentTime.
    *  Only scrolls inside .pdLyricsContent — never affects parent scroll containers. */
   function highlight(currentTime) {
