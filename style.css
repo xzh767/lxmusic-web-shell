@@ -142,10 +142,9 @@ body {
 /* ---- main ---- */
 .main {
   grid-area: main;
-  overflow-y: auto;
+  overflow-y: hidden;
   padding: 14px 18px;
   padding-bottom: calc(var(--height-player-bar, 66px) + 24px);
-  scroll-behavior: smooth;
   background: var(--color-app-background);
 }
 .view { display: none; }
@@ -425,11 +424,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .pd-spacer { flex: 1; }
 .pd-body {
   flex: 1; min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(180px, 40%) 1fr;
+  display: flex;
   gap: 18px;
-  padding-bottom: 12px;
-  /* No overflow here — lyrics-content handles its own scrolling */
+  /* .pd-right (lyrics) gets flex:1; .pd-left stays at natural height */
 }
 .pd-left {
   display: flex; flex-direction: column; align-items: center;
@@ -453,12 +450,18 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .pd-meta span { color: var(--color-font-600); font-size: 12px; }
 .pd-progress { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 300px; }
 .pd-progress input { flex: 1; }
-.pd-right { min-width: 0; display: flex; flex-direction: column; }
+.pd-right {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+  /* This container scrolls — lyrics-content fills it */
+}
 .lyrics-content {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
   padding: 6px 4px 40px;
   mask-image: linear-gradient(transparent, #000 6%, #000 90%, transparent);
+  /* No scroll propagation — this is THE scroll container for lyrics */
 }
 .lyric-line {
   padding: 8px 10px;

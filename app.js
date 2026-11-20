@@ -580,6 +580,28 @@
     }
   }
 
+  
+  /* ============ CORS proxy via Ammo gateway ============
+   * When running on Netlify/Vercel/etc., browser calls to music APIs are blocked
+   * by CORS. This module routes them through Ammo's /api/proxy.php which adds
+   * Access-Control-Allow-Origin headers. Ammo runs on xlz767.dpdns.org so it acts
+   * as a reliable middleman regardless of deployment target.
+   */
+  const CORSAIR_API = window.LX_WEB_SHELL_CORSAIR_API ||
+    'https://music-ammo-api-gateway.xlz767.dpdns.org/api/corsproxy.php';
+
+  async function corsProxyFetch(url, options = {}) {
+    // If Ammo already served this request with CORS headers, return directly
+    if (url.startsWith(CORSAIR_API)) return fetch(url, options);
+    // Route through Ammo proxy
+    const encoded = encodeURIComponent(url);
+    const proxyUrl = `${CORSAIR_API}?url=${encoded}`;
+    const resp = await fetch(proxyUrl, options);
+    if (!resp.ok) throw new Error(`CORS proxy error ${resp.status}`);
+    return resp;
+  }
+
+
   /* ---------------- export for views.js ---------------- */
 
   window.LX_APP = {
@@ -618,5 +640,6 @@
     PLAY_MODES,
     enterPlayerDetail,
     exitPlayerDetail,
+    corsProxyFetch,
   };
 })();

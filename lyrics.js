@@ -44,17 +44,28 @@
     return lines;
   }
 
-  /**
-   * 歌词统一走网关：LX 官方接口（网易云 eapi / QQ fcgi / 酷狗 / 酷我）没有 CORS 头，
-   * 浏览器无法直连，由网关代跑。
-   */
-  async function fetchLyric(source, id) {
-    const url = `${LYRIC_API}${LYRIC_API.includes('?') ? '&' : '?'}source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`;
-    console.log(`%c[LX lyric] GET 网关 ${source}/${id}`, 'color:#89ddff');
-    const response = await fetch(url, { cache: 'no-store' });
-    const data = await response.json().catch(() => null);
-    if (!data?.ok) throw new Error(data?.message || '歌词暂不可用');
-    return data.lyric || '';
+  /** Highlight the lyric line closest to currentTime.
+   *  Only scrolls inside .pdLyricsContent — never affects parent scroll containers. */
+  function highlight(currentTime) {
+    if (!state.lines.length) return;
+    let index = -1;
+    for (let i = 0; i < state.lines.length; i += 1) {
+      if (state.lines[i].time <= currentTime + 0.25) index = i;
+      else break;
+    }
+    if (index === state.activeIndex) return;
+    state.activeIndex = index;
+    const box = $('pdLyricsContent');
+    if (!box) return;
+    box.querySelectorAll('.lyric-line.active').forEach((el) => el.classList.remove('active'));
+    const el = box.querySelector(`.lyric-line[data-index="${index}"]`);
+    if (el) {
+      el.classList.add('active');
+      // Manual scrollTop on the lyric box only — independent of any ancestor scroll
+      const lineHeight = el.offsetHeight || 36;
+      const desiredScroll = el.offsetTop - Math.floor(box.clientHeight / 2) + Math.floor(lineHeight / 2);
+      box.scrollTo({ top: Math.max(0, desiredScroll), behavior: 'smooth' });
+    }
   }
 
   function render(lines, title) {
@@ -79,25 +90,6 @@
         }
       });
     });
-  }
-
-  function highlight(currentTime) {
-    if (!state.lines.length) return;
-    let index = -1;
-    for (let i = 0; i < state.lines.length; i += 1) {
-      if (state.lines[i].time <= currentTime + 0.25) index = i;
-      else break;
-    }
-    if (index === state.activeIndex) return;
-    state.activeIndex = index;
-    const box = $('pdLyricsContent');
-    if (!box) return;
-    box.querySelectorAll('.lyric-line.active').forEach((el) => el.classList.remove('active'));
-    const el = box.querySelector(`.lyric-line[data-index="${index}"]`);
-    if (el) {
-      el.classList.add('active');
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
   }
 
   function open() {

@@ -16,14 +16,21 @@
   /* ---------------- search ---------------- */
 
   /**
-   * Search runs in the browser first (client-api.js), because upstream music
-   * APIs answer domestic clients far better than an overseas host. The
-   * gateway search API is used as a fallback for platforms whose upstream
-   * refuses browser calls.
+   * Search strategy (priority order):
+   *   1. Browser-direct  — platforms whose upstream APIs send CORS headers natively
+   *   2. Ammo gateway    — proxy server adds CORS; always falls back here
+   *
+   * The Ammo gateway at xlz767.dpdns.org returns Access-Control-Allow-Origin,
+   * so step 2 works out of the box. Step 1 is a low-latency shortcut for
+   * platforms verified to carry CORS headers natively (wy/tx/kg).
    */
+  const CORS_DIRECT = {
+    wy: 'https://interface.music.163.com/eapi/search/web',
+    tx: 'https://u.y.qq.com/cgi-bin/musicu.fcg',
+    kg: 'https://songsearch.kugou.com/song_search_v2',
+  };
+
   async function searchPlatform(platform, keyword, page) {
-    // 搜索统一走网关：LX 官方接口（网易云 eapi / QQ zzc 签名）没有 CORS 头，
-    // 浏览器无法直连，只能由网关代跑。不依赖任何第三方聚合 API。
     const params = new URLSearchParams({
       q: keyword,
       keyword,
@@ -31,10 +38,61 @@
       page: String(page),
       limit: '30',
     });
-    const data = await window.LX_AMMO.fetchJsonWithRetry(`${GATEWAY_SEARCH_API}?${params.toString()}`, { cache: 'no-store' });
-    if (!data?.ok) throw new Error(data?.message || '搜索失败');
-    console.log(`%c[LX search] ${platform || '聚合'} 「${keyword}」→ ${(data.results || []).length} 条`, 'color:#7aa2ff');
-    return { results: Array.isArray(data.results) ? data.results : [], errors: data.errors || [], via: 'gateway' };
+
+    // Step 1: Browser-direct for platforms with native CORS
+    const directUrl = CORS_DIRECT[platform];
+    if (directUrl) {
+      try {
+        console.log(`%c[LX search] 浏览器直连 ${platform}`, 'color:#7fd6a0');
+        const resp = await fetch(`${directUrl}?${params.toString()}`, { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const raw = await resp.json();
+        const normalized = normalizeSongResult(platform, raw);
+        if (normalized?.results?.length > 0) {
+          console.log(`%c[LX search] ${platform} 直连成功 ${(normalized.results).length} 条`, 'color:#7aa2ff');
+          return { results: normalized.results, errors: normalized.errors || [], via: 'direct' };
+        }
+        throw new Error('直连返回空结果');
+      } catch (err) {
+        console.warn(`%c[LX search] ${platform} 直连失败(${err.message})，切换网关`, 'color:#e0af68');
+      }
+    }
+
+    // Step 2: Ammo gateway (adds CORS headers automatically)
+    try {
+      const data = await window.LX_AMMO.fetchJsonWithRetry(
+        `${GATEWAY_SEARCH_API}?${params.toString()}`,
+        { cache: 'no-store' },
+      );
+      if (!data?.ok) throw new Error(data?.message || '搜索失败');
+      console.log(`%c[LX search] ${platform || '聚合'} 「${keyword}」→ ${(data.results || []).length} 条`, 'color:#7aa2ff');
+      return { results: Array.isArray(data.results) ? data.results : [], errors: data.errors || [], via: 'gateway' };
+    } catch (err) {
+      throw new Error(`${platform}: ${err.message}`);
+    }
+  }
+
+  /** Map each platform's unique response envelope into our common song shape. */
+  function normalizeSongResult(platform, raw) {
+    if (platform === 'wy') {
+      return {
+        results: (raw?.result?.songs || []).map((s) => ({ ...s, source: 'wy' })),
+        errors: [],
+      };
+    }
+    if (platform === 'tx') {
+      return {
+        results: (raw?.data?.song?.list || []).map((s) => ({ ...s, source: 'tx' })),
+        errors: [],
+      };
+    }
+    if (platform === 'kg') {
+      return {
+        results: (raw?.data?.songlist || []).map((s) => ({ ...s, source: 'kg' })),
+        errors: [],
+      };
+    }
+    return { results: [], errors: [`${platform}: 不支持的直连响应格式`] };
   }
 
   function dedupe(results) {
