@@ -147,9 +147,6 @@ body {
   padding: 14px 18px;
   padding-bottom: calc(var(--height-player-bar, 66px) + 24px);
   background: var(--color-app-background);
-  /* Fill grid cell vertically so .player-detail can measure properly */
-  height: 0;
-  min-height: 0;
 }
 .view { display: none; }
 .view.active { display: block; }
