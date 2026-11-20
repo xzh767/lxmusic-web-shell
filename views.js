@@ -16,19 +16,22 @@
   /* ---------------- search ---------------- */
 
   /**
-   * Search strategy (priority order):
-   *   1. Browser-direct  — platforms whose upstream APIs send CORS headers natively
-   *   2. Ammo gateway    — proxy server adds CORS; always falls back here
+   * Search architecture:
    *
-   * The Ammo gateway at xlz767.dpdns.org returns Access-Control-Allow-Origin,
-   * so step 2 works out of the box. Step 1 is a low-latency shortcut for
-   * platforms verified to carry CORS headers natively (wy/tx/kg).
+   *   1. Ammo gateway (default)     — adds CORS headers, works everywhere
+   *   2. Browser-direct (optional)  — zero-latency but requires CORS-capable API
+   *
+   * Configure via global config (set before scripts load):
+   *   window.LX_WEB_SHELL_DIRECT_SEARCH = true   // enable direct calls (unreliable)
+   *   window.LX_WEB_SHELL_CORS_PROXY  = '<url>'  // custom proxy instead of Ammo
+   *
+   * Most music-platform upstream APIs (NetEase eapi / QQ zzc / Kugou / Kuwo)
+   * do NOT send Access-Control-Allow-Origin headers, so direct browser calls are
+   * blocked by CORS. The Ammo gateway at xlz767.dpdns.org proxies these requests
+   * server-side and adds the required headers, making it the reliable default path.
    */
-  const CORS_DIRECT = {
-    wy: 'https://interface.music.163.com/eapi/search/web',
-    tx: 'https://u.y.qq.com/cgi-bin/musicu.fcg',
-    kg: 'https://songsearch.kugou.com/song_search_v2',
-  };
+  const USE_DIRECT_SEARCH = window.LX_WEB_SHELL_DIRECT_SEARCH === true;
+  const CORS_PROXY_URL = window.LX_WEB_SHELL_CORS_PROXY || GATEWAY_SEARCH_API;
 
   async function searchPlatform(platform, keyword, page) {
     const params = new URLSearchParams({
@@ -38,32 +41,38 @@
       page: String(page),
       limit: '30',
     });
+    const searchUrl = `${CORS_PROXY_URL}?${params.toString()}`;
 
-    // Step 1: Browser-direct for platforms with native CORS
-    const directUrl = CORS_DIRECT[platform];
-    if (directUrl) {
-      try {
-        console.log(`%c[LX search] 浏览器直连 ${platform}`, 'color:#7fd6a0');
-        const resp = await fetch(`${directUrl}?${params.toString()}`, { cache: 'no-store' });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const raw = await resp.json();
-        const normalized = normalizeSongResult(platform, raw);
-        if (normalized?.results?.length > 0) {
-          console.log(`%c[LX search] ${platform} 直连成功 ${(normalized.results).length} 条`, 'color:#7aa2ff');
-          return { results: normalized.results, errors: normalized.errors || [], via: 'direct' };
+    // Optional: try browser-direct first (only useful where upstream allows CORS)
+    if (USE_DIRECT_SEARCH) {
+      const directEndpoints = {
+        wy: 'https://interface.music.163.com/eapi/search/web',
+        tx: 'https://u.y.qq.com/cgi-bin/musicu.fcg',
+        kg: 'https://songsearch.kugou.com/song_search_v2',
+        kw: 'https://www.kuwo.cn/api/www/search/searchKey',
+      };
+      const directUrl = directEndpoints[platform];
+      if (directUrl) {
+        try {
+          console.log(`%c[LX search] 直连尝试 ${platform}`, 'color:#7fd6a0');
+          const resp = await fetch(`${directUrl}?${params.toString()}`, { cache: 'no-store' });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const raw = await resp.json();
+          const normalized = normalizeSongResult(platform, raw);
+          if (normalized?.results?.length > 0) {
+            console.log(`%c[LX search] ${platform} 直连成功 ${(normalized.results).length} 条`, 'color:#7aa2ff');
+            return { results: normalized.results, errors: [], via: 'direct' };
+          }
+          throw new Error('empty results');
+        } catch (err) {
+          console.info(`%c[LX search] ${platform} 直连不可用，走网关 (${err.message})`, 'color:#89ddff');
         }
-        throw new Error('直连返回空结果');
-      } catch (err) {
-        console.warn(`%c[LX search] ${platform} 直连失败(${err.message})，切换网关`, 'color:#e0af68');
       }
     }
 
-    // Step 2: Ammo gateway (adds CORS headers automatically)
+    // Main path: Ammo gateway (or configured CORS proxy)
     try {
-      const data = await window.LX_AMMO.fetchJsonWithRetry(
-        `${GATEWAY_SEARCH_API}?${params.toString()}`,
-        { cache: 'no-store' },
-      );
+      const data = await window.LX_AMMO.fetchJsonWithRetry(searchUrl, { cache: 'no-store' });
       if (!data?.ok) throw new Error(data?.message || '搜索失败');
       console.log(`%c[LX search] ${platform || '聚合'} 「${keyword}」→ ${(data.results || []).length} 条`, 'color:#7aa2ff');
       return { results: Array.isArray(data.results) ? data.results : [], errors: data.errors || [], via: 'gateway' };
