@@ -7,10 +7,23 @@
 (() => {
   'use strict';
 
-  const LYRIC_API = window.LX_WEB_SHELL_LYRIC_API
-    || 'https://music-ammo-api-gateway.xlz767.dpdns.org/api/lyric.php';
+  const AMMO_BASE = 'https://music-ammo-api-gateway.xlz767.dpdns.org';
+  const LX_APP = window.LX_APP;
+  const $ = (id) => LX_APP ? LX_APP.$(id) : document.getElementById(id);
 
-  const $ = (id) => document.getElementById(id);
+  /* ── Proxy-aware lyric fetcher ───────────────────────────────────────────
+   *
+   * Architecture mirrors views.js searchPlatform:
+   *   Tier 1 – Browser direct   : try native API first (will hit CORS on most platforms)
+   *   Tier 2 – User edge proxy  : if window.LX_WEB_SHELL_CORS_PROXY is set, route through it
+   *   Tier 3 – Ammo gateway     : last resort fallback
+   *
+   * Note: Ammo's lyric API normalises all platforms into a single response format
+   * ({ok, lyric:"[LRC text]"}) which parseLrc() handles natively.
+   * Direct calls bypass this normalisation and return platform-specific formats
+   * (LRC text or JSON Lines), both supported by parseLrc().
+   */
+
   const state = { lines: [], activeIndex: -1, url: '', currentSongKey: '' };
   function esc(value) {
     return String(value ?? '')
@@ -78,14 +91,76 @@
     return lines;
   }
 
-  /** Fetch LRC text from Ammo gateway lyric API. Gateway adds CORS headers automatically. */
+  /** Fetch LRC text using 3-tier architecture: direct → proxy → Ammo fallback. */
   async function fetchLyric(source, id) {
-    const url = `${LYRIC_API}${LYRIC_API.includes('?') ? '&' : '?'}source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`;
-    console.log(`%c[LX lyric] GET 网关 ${source}/${id}`, 'color:#89ddff');
-    const response = await fetch(url, { cache: 'no-store' });
-    const data = await response.json().catch(() => null);
-    if (!data?.ok) throw new Error(data?.message || '歌词暂不可用');
-    return data.lyric || '';
+    // ── Tier 1: browser direct ──────────────────────────────────────────────
+    try {
+      console.log(`%c[LX lyric] 直连尝试 ${source}/${id}`, 'color:#7fd6a0');
+      const urls = {
+        wy: `https://music.163.com/api/song/lyric?id=${id}&lv=1`,
+        tx: `https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${id}&format=json`,
+      };
+      const directUrl = urls[source];
+      if (directUrl) {
+        const resp = await fetch(directUrl, { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const raw = await resp.text();
+        return parseDirectLyric(raw, source);
+      }
+    } catch (err) {
+      console.info(`%c[LX lyric] 直连失败 ${source} (${err.message})`, 'color:#89ddff');
+    }
+
+    // ── Tier 2: user edge proxy ─────────────────────────────────────────────
+    const proxyBaseUrl = window.LX_WEB_SHELL_CORS_PROXY;
+    if (proxyBaseUrl) {
+      try {
+        console.log(`%c[LX lyric] 经边缘代理获取 ${source}/${id}`, 'color:#e0af68');
+        const targetUrl = `${AMMO_BASE}/api/lyric.php?source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`;
+        const proxyUrl = `${proxyBaseUrl}/${encodeURIComponent(targetUrl)}`;
+        const resp = await fetch(proxyUrl, { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`proxy HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!data?.ok) throw new Error(data?.message || '歌词暂不可用');
+        console.log(`%c[LX lyric] 代理成功 ${source}/${id}`, 'color:#7aa2ff');
+        return data.lyric || '';
+      } catch (err) {
+        console.warn(`%c[LX lyric] 代理失败 ${source} (${err.message})`, 'color:#ff5d73');
+      }
+    }
+
+    // ── Tier 3: Ammo gateway (last resort) ──────────────────────────────────
+    try {
+      console.log(`%c[LX lyric] 最终走 Ammo 网关 ${source}/${id}`, 'color:#c792ea');
+      const url = `${AMMO_BASE}/api/lyric.php?source=${encodeURIComponent(source)}&id=${encodeURIComponent(id)}`;
+      const response = await fetch(url, { cache: 'no-store' });
+      const data = await response.json().catch(() => null);
+      if (!data?.ok) throw new Error(data?.message || '歌词暂不可用');
+      return data.lyric || '';
+    } catch (err) {
+      throw new Error(`${source}: ${err.message}`);
+    }
+  }
+
+  /** Parse platform-specific raw lyric response into normalised LRC string. */
+  function parseDirectLyric(raw, source) {
+    if (source === 'wy') {
+      // NetEase returns JSON with lrc.line or lyric field
+      let obj;
+      try { obj = JSON.parse(raw); } catch { return raw; }
+      return obj.lrc?.lyric || obj.klyric?.lyric || obj.lyric || '';
+    }
+    if (source === 'tx') {
+      // QQ Music returns JSON-like string with lyric key
+      let obj;
+      try {
+        // Strip potential callback wrapper: func({...})
+        const jsonPart = raw.replace(/^\w+\(/, '').replace(/\);\s*$/, '');
+        obj = JSON.parse(jsonPart);
+      } catch { return raw; }
+      return obj?.lyric?.lyric || obj?.lyric || '';
+    }
+    return raw;
   }
 
   /** Highlight the lyric line closest to currentTime.

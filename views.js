@@ -7,78 +7,160 @@
 
   const A = window.LX_APP;
   const PLATFORM_ORDER = ['wy', 'tx', 'kg', 'kw', 'mg'];
-  const GATEWAY_SEARCH_API = window.LX_WEB_SHELL_SEARCH_API
-    || 'https://music-ammo-api-gateway.xlz767.dpdns.org/api/search.php';
-  const PLAYLIST_API = window.LX_WEB_SHELL_PLAYLIST_API
-    || 'https://music-ammo-api-gateway.xlz767.dpdns.org/api/playlist.php';
+  const AMMO_BASE = 'https://music-ammo-api-gateway.xlz767.dpdns.org';
   const { $, esc, showNotice, hideNotice, toast } = A;
+
+  /* ── Proxy-aware fetch helpers ───────────────────────────────────────────
+   *
+   * Architecture (3-tier):
+   *   Tier 1 – Browser direct   : zero-latency, bypasses author infra.
+   *                                Only succeeds where upstream sends CORS
+   *                                headers (rare; most music platforms block).
+   *   Tier 2 – User edge proxy  : when window.LX_WEB_SHELL_CORS_PROXY is set.
+   *                                Runs on the SAME origin the user deploys
+   *                                to (Netlify / CF Pages / Vercel / own VPS),
+   *                                adds CORS headers server-side, no latency
+   *                                penalty vs. Ammo.  PRIMARY PATH after v20261120i.
+   *   Tier 3 – Ammo gateway     : LAST RESORT.  Author's server proxies the
+   *                                request and forwards it.  Works everywhere
+   *                                but adds ~1 round-trip and depends on a
+   *                                single host.
+   *
+   * Configure (place <script> BEFORE other LX scripts in index.html):
+   *   window.LX_WEB_SHELL_CORS_PROXY = "https://your-proxy.example.com/proxy"
+   *
+   * See proxy/README.md for deployment guides (CF Pages / Netlify / Vercel).
+   */
 
   /* ---------------- search ---------------- */
 
+
   /**
-   * Search architecture:
-   *
-   *   1. Ammo gateway (default)     — adds CORS headers, works everywhere
-   *   2. Browser-direct (optional)  — zero-latency but requires CORS-capable API
-   *
-   * Configure via global config (set before scripts load):
-   *   window.LX_WEB_SHELL_DIRECT_SEARCH = true   // enable direct calls (unreliable)
-   *   window.LX_WEB_SHELL_CORS_PROXY  = '<url>'  // custom proxy instead of Ammo
-   *
-   * Most music-platform upstream APIs (NetEase eapi / QQ zzc / Kugou / Kuwo)
-   * do NOT send Access-Control-Allow-Origin headers, so direct browser calls are
-   * blocked by CORS. The Ammo gateway at xlz767.dpdns.org proxies these requests
-   * server-side and adds the required headers, making it the reliable default path.
+   * Unified proxy-aware fetcher.
+   * Tries: browser-direct → CORS proxy (if configured) → Ammo gateway (last resort).
+   * @param {string} platform  source key ('wy'|'tx'|'kg'|'kw'|'mg')
+   * @param {string} keyword
+   * @param {number} page
+   * @returns {{results, errors, via}}
    */
-  const USE_DIRECT_SEARCH = window.LX_WEB_SHELL_DIRECT_SEARCH === true;
-  const CORS_PROXY_URL = window.LX_WEB_SHELL_CORS_PROXY || GATEWAY_SEARCH_API;
-
   async function searchPlatform(platform, keyword, page) {
-    const params = new URLSearchParams({
-      q: keyword,
-      keyword,
-      source: platform || '',
-      page: String(page),
-      limit: '30',
-    });
-    const searchUrl = `${CORS_PROXY_URL}?${params.toString()}`;
+    // ── Tier 1: browser direct ──────────────────────────────────────────────
+    try {
+      console.log(`%c[LX search] 直连尝试 ${platform}`, 'color:#7fd6a0');
+      const raw = await fetchDirectSearch(platform, keyword, page);
+      if (raw && raw.length > 0) {
+        console.log(`%c[LX search] ${platform} 直连成功 ${raw.length} 条`, 'color:#7aa2ff');
+        return { results: raw, errors: [], via: 'direct' };
+      }
+      throw new Error('empty results');
+    } catch (err) {
+      console.info(`%c[LX search] ${platform} 直连失败 (${err.message})`, 'color:#89ddff');
+    }
 
-    // Optional: try browser-direct first (only useful where upstream allows CORS)
-    if (USE_DIRECT_SEARCH) {
-      const directEndpoints = {
-        wy: 'https://interface.music.163.com/eapi/search/web',
-        tx: 'https://u.y.qq.com/cgi-bin/musicu.fcg',
-        kg: 'https://songsearch.kugou.com/song_search_v2',
-        kw: 'https://www.kuwo.cn/api/www/search/searchKey',
-      };
-      const directUrl = directEndpoints[platform];
-      if (directUrl) {
-        try {
-          console.log(`%c[LX search] 直连尝试 ${platform}`, 'color:#7fd6a0');
-          const resp = await fetch(`${directUrl}?${params.toString()}`, { cache: 'no-store' });
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          const raw = await resp.json();
-          const normalized = normalizeSongResult(platform, raw);
-          if (normalized?.results?.length > 0) {
-            console.log(`%c[LX search] ${platform} 直连成功 ${(normalized.results).length} 条`, 'color:#7aa2ff');
-            return { results: normalized.results, errors: [], via: 'direct' };
-          }
-          throw new Error('empty results');
-        } catch (err) {
-          console.info(`%c[LX search] ${platform} 直连不可用，走网关 (${err.message})`, 'color:#89ddff');
+    // ── Tier 2: user-configured CORS proxy ───────────────────────────────────
+    const proxyBaseUrl = window.LX_WEB_SHELL_CORS_PROXY;
+    if (proxyBaseUrl) {
+      try {
+        console.log(`%c[LX search] 经边缘代理请求 ${platform}`, 'color:#e0af68');
+        const result = await fetchViaProxy(proxyBaseUrl, 'search', platform, keyword, page);
+        if (result.results?.length > 0) {
+          console.log(`%c[LX search] ${platform} 代理成功 ${result.results.length} 条`, 'color:#7aa2ff');
+          return result;
         }
+        throw new Error('empty results');
+      } catch (err) {
+        console.warn(`%c[LX search] ${platform} 代理失败 (${err.message})`, 'color:#ff5d73');
       }
     }
 
-    // Main path: Ammo gateway (or configured CORS proxy)
+    // ── Tier 3: Ammo gateway (last resort) ──────────────────────────────────
     try {
-      const data = await window.LX_AMMO.fetchJsonWithRetry(searchUrl, { cache: 'no-store' });
+      console.log(`%c[LX search] 最终走 Ammo 网关 ${platform}`, 'color:#c792ea');
+      const data = await window.LX_AMMO.fetchJsonWithRetry(
+        `${AMMO_BASE}/api/search.php?source=${encodeURIComponent(platform)}&keyword=${encodeURIComponent(keyword)}&page=${page}&limit=30`,
+        { cache: 'no-store' },
+      );
       if (!data?.ok) throw new Error(data?.message || '搜索失败');
-      console.log(`%c[LX search] ${platform || '聚合'} 「${keyword}」→ ${(data.results || []).length} 条`, 'color:#7aa2ff');
-      return { results: Array.isArray(data.results) ? data.results : [], errors: data.errors || [], via: 'gateway' };
+      console.log(`%c[LX search] ${platform} Ammo返回 ${(data.results||[]).length} 条`, 'color:#7aa2ff');
+      return {
+        results: Array.isArray(data.results) ? data.results : [],
+        errors: data.errors || [],
+        via: 'ammo',
+      };
     } catch (err) {
       throw new Error(`${platform}: ${err.message}`);
     }
+  }
+
+  /** Build the correct upstream URL per platform and attempt a direct browser call. */
+  async function fetchDirectSearch(platform, keyword, page) {
+    const ENDPOINTS = {
+      wy: () => 'https://interface.music.163.com/eapi/search/web',
+      tx: () => 'https://u.y.qq.com/cgi-bin/musicu.fcg',
+      kg: () => 'https://songsearch.kugou.com/song_search_v2',
+      kw: () => 'https://www.kuwo.cn/api/www/search/searchKey',
+      mg: () => null, // 咪咕搜索接口暂不支持浏览器直连
+    };
+    const url = ENDPOINTS[platform]?.();
+    if (!url) return [];
+
+    const params = new URLSearchParams({
+      s: keyword,
+      limit: '30',
+      offset: String((page - 1) * 30),
+      total: 'true',
+    });
+    const resp = await fetch(`${url}?${params}`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const raw = await resp.json();
+    return normalizeSongResult(platform, raw)?.results || [];
+  }
+
+  /** Forward a standardised internal request through the user's edge proxy. */
+  async function fetchViaProxy(proxyBaseUrl, kind, ...args) {
+    // Encode the target upstream URL so the proxy knows what to call.
+    // The proxy must decode it; we build a safe representation here.
+    let targetUrl;
+    if (kind === 'search') {
+      // Map our normalised args → platform-specific upstream URL the proxy understands.
+      const [platform, keyword, page] = args;
+      const mapping = {
+        wy: { u: 'https://interface.music.163.com/eapi/search/web', p: 's', o: { keyword, page, limit: 30 } },
+        tx: { u: 'https://u.y.qq.com/cgi-bin/musicu.fcg',           p: 'keyword', o: { keyword, page, limit: 30 } },
+        kg: { u: 'https://songsearch.kugou.com/song_search_v2',       p: 'keyword', o: { keyword, page, limit: 30 } },
+        kw: { u: 'https://www.kuwo.cn/api/www/search/searchKey',      p: 'keyword', o: { keyword, page, limit: 30 } },
+      };
+      const cfg = mapping[platform];
+      if (!cfg) throw new Error(`unknown platform ${platform}`);
+      const qs = new URLSearchParams();
+      qs.set(cfg.p, cfg.o.keyword);
+      qs.set('pn', String(cfg.o.page));
+      qs.set('rn', String(cfg.o.limit));
+      targetUrl = `${cfg.u}?${qs.toString()}`;
+    } else if (kind === 'lyric') {
+      // lyric.js passes (platform, id) — build the Ammo-compatible URL.
+      const [platform, id] = args;
+      targetUrl = `${AMMO_BASE}/api/lyric.php?source=${encodeURIComponent(platform)}&id=${encodeURIComponent(id)}`;
+    } else if (kind === 'playlist') {
+      const [platform, id] = args;
+      targetUrl = `${AMMO_BASE}/api/playlist.php?source=${encodeURIComponent(platform)}&id=${encodeURIComponent(id)}`;
+    } else {
+      throw new Error(`unknown proxy kind: ${kind}`);
+    }
+
+    const proxyUrl = `${proxyBaseUrl}/${encodeURIComponent(targetUrl)}`;
+    const resp = await fetch(proxyUrl, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`proxy HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    // Normalise lyric/playlist responses back to our internal shape.
+    if (kind === 'lyric') return data; // already the expected format
+    if (kind === 'playlist') return data;
+    if (kind === 'search') {
+      if (!data?.ok) throw new Error(data?.message || '搜索失败');
+      return { results: Array.isArray(data.results) ? data.results : [], errors: data.errors || [], via: 'proxy' };
+    }
+    throw new Error('unexpected proxy response');
   }
 
   /** Map each platform's unique response envelope into our common song shape. */
