@@ -504,11 +504,9 @@
     if (current) current.textContent = formatDuration(audio.currentTime) || '0:00';
     if (duration) duration.textContent = formatDuration(dur) || '0:00';
     const pdSeek = $('pdSeek'); const pdCur = $('pdCurrent'); const pdDur = $('pdDuration');
-    if (pdSeek && document.querySelector('#lyricsPanel') && !document.getElementById('lyricsPanel').classList.contains('hidden')) {
-      pdSeek.value = $('seekBar').value;
-      if (pdCur) pdCur.textContent = $('pbCurrent').textContent;
-      if (pdDur) pdDur.textContent = $('pbDuration').textContent;
-    }
+    if (pdSeek) pdSeek.value = $('seekBar')?.value ?? '0';
+    if (pdCur) pdCur.textContent = $('pbCurrent')?.textContent ?? '0:00';
+    if (pdDur) pdDur.textContent = $('pbDuration')?.textContent ?? '0:00';
   }
 
   function syncPlayButton() {
@@ -528,6 +526,50 @@
       el.classList.toggle('active', el.dataset.view === view);
     });
     $('main').scrollTop = 0;
+  }
+
+  function exitPlayerDetail() {
+    const pd = $('playerDetail');
+    if (!pd) return;
+    pd.classList.remove('active');
+    pd.setAttribute('aria-hidden', 'true');
+    // Show whichever view was active before (or default to search)
+    const currentView = state.view || 'search';
+    switchView(currentView);
+  }
+
+  function enterPlayerDetail(song) {
+    if (!song) return toast('还没有播放歌曲', 'warn');
+    const pd = $('playerDetail');
+    if (!pd) return;
+    // Hide all regular views
+    document.querySelectorAll('.view').forEach((el) => el.classList.remove('active'));
+    // Show player-detail inside main
+    pd.classList.add('active');
+    pd.removeAttribute('aria-hidden');
+    // Populate metadata
+    const cover = $('pdCover');
+    if (cover && song.picture) {
+      cover.innerHTML = `<img src="${esc(song.picture)}" alt="封面">`;
+    } else if (cover) {
+      cover.textContent = '🎵';
+    }
+    const title = $('pdTitle');
+    const artist = $('pdArtist');
+    if (title) title.textContent = song.name || '未知歌曲';
+    if (artist) artist.textContent = song.artist ? ` · ${song.artist}` : '';
+    // Load lyrics via LX_LYRICS API (reuse its load logic internally)
+    window.LX_LYRICS?.load(song.source, song.id, `${song.name} · ${song.artist}`, true, song._gd?.gdSource);
+    // Sync seek bar from global audio
+    const seek = $('pdSeek');
+    const audio = $('audio');
+    if (seek && audio) {
+      seek.value = audio.currentTime;
+      seek.addEventListener('input', () => {
+        const dur = audio.duration || 1;
+        audio.currentTime = (Number(seek.value) / 100) * dur;
+      });
+    }
   }
 
   /* ---------------- export for views.js ---------------- */
@@ -566,5 +608,7 @@
     KEYS,
     PLATFORM_NAMES,
     PLAY_MODES,
+    enterPlayerDetail,
+    exitPlayerDetail,
   };
 })();

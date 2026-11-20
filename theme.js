@@ -247,7 +247,7 @@
     try {
       saved = localStorage.getItem(STORAGE_KEY);
     } catch { /* ignore */ }
-    applyTheme(saved || 'black');
+    applyTheme(saved || 'green');
   }
 
   window.LX_THEME = {

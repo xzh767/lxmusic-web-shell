@@ -565,22 +565,15 @@
     $('prevButton').addEventListener('click', () => A.prevSong());
     $('playModeButton').addEventListener('click', () => A.cyclePlayMode());
     $('lyricsButton').addEventListener('click', () => {
-      const panel = window.LX_LYRICS;
-      if (!panel) return;
-      if (panel.isOpen()) {
-        panel.close();
-        return;
-      }
-      if (A.state.current) {
-        panel.load(A.state.current.source, A.state.current.id, `${A.state.current.name} · ${A.state.current.artist}`, true, A.state.current._gd?.gdSource);
-      } else {
-        toast('还没有播放歌曲', 'warn');
-      }
+      if (A.state.current) A.enterPlayerDetail(A.state.current);
+      else toast('还没有播放歌曲', 'warn');
     });
-    $('lyricsButton').addEventListener('click', () => window.LX_LYRICS?.open());
-    $('closeLyricsButton').addEventListener('click', () => window.LX_LYRICS?.close());
+    $('pdBackBtn').addEventListener('click', () => A.exitPlayerDetail());
 
-    $('pbCover').addEventListener('click', () => window.LX_LYRICS?.open());
+    $('pbCover').addEventListener('click', () => {
+      if (A.state.current) A.enterPlayerDetail(A.state.current);
+      else toast('还没有播放歌曲', 'warn');
+    });
     $('favToggleButton').addEventListener('click', () => {
       if (!A.state.current) return toast('还没有播放歌曲', 'warn');
       A.toggleFavorite(A.state.current);
