@@ -912,11 +912,13 @@
       }
       if (platform === 'tx') {
         // QQ Music fcg endpoint; categoryId defaults to 10000000 (全部)
+        // Note: omit `platform` param — `yqq.json` triggers JSONP wrapper which
+        // makes `resp.json()` fail when going through the edge proxy.
         const categoryId = catParam ? Number(catParam) : 10000000;
         const qs = new URLSearchParams({
           picmid: '1', rnd: Math.random().toString(), g_tk: '732560869',
           loginUin: '0', hostUin: '0', format: 'json', inCharset: 'utf8',
-          outCharset: 'utf-8', notice: '0', platform: 'yqq.json', needNewCode: '0',
+          outCharset: 'utf-8', notice: '0', needNewCode: '0',
           categoryId: String(categoryId), sortId: '5',
           sin: String(offset), ein: String(offset + PL_LIMIT),
         });
