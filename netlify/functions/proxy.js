@@ -10,6 +10,15 @@ const ALLOWED_HOSTS = new Set([
   'app.c.nf.migu.cn', 'cscs.migu.cn',
 ]);
 
+// Per-host default headers — some platforms gatekeep by Referer/User-Agent.
+const DEFAULT_HEADERS = {
+  'music.163.com': { Referer: 'https://music.163.com/' },
+  'interface.music.163.com': { Referer: 'https://music.163.com/' },
+  'c.y.qq.com':     { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
+  'u.y.qq.com':     { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
+  'www.kuwo.cn':    { Referer: 'https://www.kuwo.cn/' },
+};
+
 async function proxyRequest(event, context) {
   const url = new URL(event.rawUrl || `http://local${event.path}`);
   let targetUrl = url.searchParams.get('url');
@@ -37,9 +46,10 @@ async function proxyRequest(event, context) {
   }
 
   try {
+    const hostDefaults = DEFAULT_HEADERS[parsed.hostname] || {};
     const resp = await fetch(targetUrl, {
       method: event.httpMethod,
-      headers: { ...event.headers, host: parsed.hostname },
+      headers: { ...hostDefaults, ...event.headers, host: parsed.hostname },
       body: event.httpMethod === 'POST' ? event.body : undefined,
     });
     const body = await resp.text();

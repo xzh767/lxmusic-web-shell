@@ -744,7 +744,6 @@
     async function loadPlaylistPage() {
       const grid = $('playlistGrid');
       const moreBtn = $('plMoreBtn');
-      const notice = $('plNotice');
       const cfg = PLAYLIST_PLATFORMS[_plSource];
       if (!cfg || !cfg.ok) {
         grid.innerHTML = '<div class="empty" style="grid-column:1/-1">该平台暂不支持在线歌单推荐</div>';
@@ -755,47 +754,184 @@
       grid.innerHTML = '<div class="empty" style="grid-column:1/-1">加载中…</div>';
       moreBtn.classList.add('hidden');
       hideNotice('plNotice');
+
+      // Tier 1: browser direct
+      let data = null;
+      let via = '';
       try {
-        const params = new URLSearchParams();
-        params.set('type', 'hot');
-        params.set('source', _plSource);
-        params.set('page', String(_plPage));
-        params.set('limit', String(PL_LIMIT));
-        if (_plSource === 'wy' && _plTag) params.set('cat', _plTag);
-        else if (_plSource === 'tx' && _plTag) params.set('cat', _plTag);
-        const data = await window.LX_AMMO.fetchJsonWithRetry(
-          `${AMMO_BASE}/api/playlist.php?${params.toString()}`,
-          { cache: 'no-store' },
-        );
-        if (!data?.ok || !data.playlists?.length) {
-          grid.innerHTML = '<div class="empty">暂无歌单</div>';
-          return;
+        console.log(`%c[LX playlist] 直连尝试 ${_plSource}`, 'color:#7fd6a0');
+        data = await fetchDirectHotPlaylist(_plSource, _plTag, _plPage);
+        if (data && data.playlists?.length) {
+          via = 'direct';
+          console.log(`%c[LX playlist] ${_plSource} 直连成功 ${data.playlists.length} 条`, 'color:#7aa2ff');
         }
-        grid.innerHTML = '';
-        for (const pl of data.playlists) {
-          const card = document.createElement('div');
-          card.className = 'pl-card';
-          const thumb = (pl.cover || '').replace(/^http:/, 'https:');
-          card.innerHTML = `
-            <img class="pl-card-cover" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">
-            <div class="pl-card-info">
-              <div class="pl-card-title">${esc(pl.title)}</div>
-              <div class="pl-card-meta">${esc(pl.creator || '')} · ${pl.trackCount ?? '?'} 首</div>
-            </div>`;
-          card.addEventListener('click', () => openPlaylistById(pl.source, pl.id));
-          grid.appendChild(card);
-        }
-        if (( _plPage + 1 ) * PL_LIMIT < (data.total || 0)) {
-          moreBtn.classList.remove('hidden');
-          moreBtn.disabled = false;
-          moreBtn.textContent = '加载更多';
-          moreBtn.onclick = () => { _plPage++; loadPlaylistPage(); };
-        }
-        showNotice('plNotice', `共 ${data.total || '?'} 个歌单`, 'success');
       } catch (err) {
-        grid.innerHTML = `<div class="empty">加载失败：${esc(err.message)}</div>`;
-        console.error('[在线歌单] 失败', err);
+        console.info(`%c[LX playlist] ${_plSource} 直连失败 (${err.message})`, 'color:#89ddff');
       }
+
+      // Tier 2: edge proxy
+      if (!data) {
+        let proxyBaseUrl = null;
+        if (PROXY_AUTO_DETECT) {
+          try { proxyBaseUrl = await PROXY_AUTO_DETECT.resolve(); } catch {}
+        }
+        if (proxyBaseUrl) {
+          try {
+            console.log(`%c[LX playlist] 经边缘代理请求 ${_plSource}`, 'color:#e0af68');
+            const proxyUrl = buildHotPlaylistProxyUrl(proxyBaseUrl, _plSource, _plTag, _plPage);
+            const resp = await fetch(proxyUrl, { cache: 'no-store' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const json = await resp.json();
+            if (json?.ok && json?.playlists?.length) {
+              data = json;
+              via = 'proxy';
+              console.log(`%c[LX playlist] ${_plSource} 代理成功 ${data.playlists.length} 条`, 'color:#7aa2ff');
+            } else throw new Error(json?.message || 'proxy returned no playlists');
+          } catch (err) {
+            console.warn(`%c[LX playlist] ${_plSource} 代理失败 (${err.message})`, 'color:#ff5d73');
+          }
+        }
+      }
+
+      // Tier 3: Ammo gateway (last resort — keeps returning correct data for now)
+      if (!data) {
+        try {
+          console.log(`%c[LX playlist] 最终走 Ammo 网关 ${_plSource}`, 'color:#c792ea');
+          const ammoData = await window.LX_AMMO.fetchJsonWithRetry(
+            buildAmmoHotPlaylistUrl(_plSource, _plTag, _plPage),
+            { cache: 'no-store' },
+          );
+          if (ammoData?.ok && ammoData?.playlists?.length) {
+            data = ammoData;
+            via = 'ammo';
+          } else throw new Error(ammoData?.message || 'Ammo returned no playlists');
+        } catch (err) {
+          console.error(`%c[LX playlist] ${_plSource} Ammo失败 (${err.message})`, 'color:#ff5d73');
+        }
+      }
+
+      if (!data?.playlists?.length) {
+        grid.innerHTML = '<div class="empty">暂无歌单</div>';
+        if (!via) showNotice('plNotice', '加载失败，请稍后重试', 'error');
+        return;
+      }
+
+      grid.innerHTML = '';
+      for (const pl of data.playlists) {
+        const card = document.createElement('div');
+        card.className = 'pl-card';
+        const thumb = (pl.cover || '').replace(/^http:/, 'https:');
+        card.innerHTML = `
+          <img class="pl-card-cover" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">
+          <div class="pl-card-info">
+            <div class="pl-card-title">${esc(pl.title)}</div>
+            <div class="pl-card-meta">${esc(pl.creator || '')} · ${pl.trackCount ?? '?'} 首</div>
+          </div>`;
+        card.addEventListener('click', () => openPlaylistById(pl.source, pl.id));
+        grid.appendChild(card);
+      }
+      if ((_plPage + 1) * PL_LIMIT < (data.total || 0)) {
+        moreBtn.classList.remove('hidden');
+        moreBtn.disabled = false;
+        moreBtn.textContent = '加载更多';
+        moreBtn.onclick = () => { _plPage++; loadPlaylistPage(); };
+      }
+      showNotice('plNotice', `共 ${data.total || '?'} 个歌单（${via || 'Ammo'}）`, 'success');
+    }
+
+    /** Build the upstream URL for direct browser calls (tier 1). */
+    function buildDirectHotPlaylistUrl(platform, catParam, page) {
+      const offset = page * PL_LIMIT;
+      if (platform === 'wy') {
+        // Netease unauthenticated playlist list endpoint (works without login)
+        const qs = new URLSearchParams({
+          cat: catParam || '全部',
+          order: 'hot',
+          limit: String(PL_LIMIT),
+          offset: String(offset),
+          total: 'false',
+        });
+        return `https://music.163.com/api/playlist/list?${qs.toString()}`;
+      }
+      if (platform === 'tx') {
+        // QQ Music fcg endpoint; categoryId defaults to 10000000 (全部)
+        const categoryId = catParam ? Number(catParam) : 10000000;
+        const qs = new URLSearchParams({
+          picmid: '1',
+          rnd: Math.random().toString(),
+          g_tk: '732560869',
+          loginUin: '0',
+          hostUin: '0',
+          format: 'json',
+          inCharset: 'utf8',
+          outCharset: 'utf-8',
+          notice: '0',
+          platform: 'yqq.json',
+          needNewCode: '0',
+          categoryId: String(categoryId),
+          sortId: '5',
+          sin: String(offset),
+          ein: String(offset + PL_LIMIT),
+        });
+        return `https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg?${qs.toString()}`;
+      }
+      throw new Error(`unsupported platform for hot playlists: ${platform}`);
+    }
+
+    /** Parse the upstream response body into our internal shape. */
+    function parseHotPlaylistResponse(platform, raw) {
+      if (platform === 'wy') {
+        const items = Array.isArray(raw?.playlists) ? raw.playlists : [];
+        const playlists = items.map((p) => ({
+          id: String(p.id ?? ''),
+          source: 'wy',
+          title: p.name ?? '',
+          creator: p.creator?.nickname ?? '',
+          cover: p.coverImgUrl ?? p.picUrl ?? '',
+          trackCount: p.trackCount ?? 0,
+        })).filter((p) => p.id && p.title);
+        return { ok: true, total: raw?.total ?? items.length, playlists };
+      }
+      if (platform === 'tx') {
+        const items = Array.isArray(raw?.data?.list) ? raw.data.list : [];
+        const playlists = items.map((item) => ({
+          id: String(item.dissid ?? ''),
+          source: 'tx',
+          title: item.dissname ?? '',
+          creator: item.nick ?? item.creator ?? '',
+          cover: item.imgurl ?? '',
+          trackCount: 0,
+        })).filter((p) => p.id && p.title);
+        return { ok: true, total: raw?.data?.sum ?? playlists.length, playlists };
+      }
+      throw new Error('unknown platform');
+    }
+
+    /** Tier 1: attempt direct browser call (may fail due to CORS). */
+    async function fetchDirectHotPlaylist(platform, catParam, page) {
+      const url = buildDirectHotPlaylistUrl(platform, catParam, page);
+      const resp = await fetch(url, { cache: 'no-store' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const raw = await resp.json();
+      return parseHotPlaylistResponse(platform, raw);
+    }
+
+    /** Tier 2: build the proxy-forwarded URL. */
+    function buildHotPlaylistProxyUrl(proxyBaseUrl, platform, catParam, page) {
+      const upstream = buildDirectHotPlaylistUrl(platform, catParam, page);
+      return `${proxyBaseUrl}/${encodeURIComponent(upstream)}`;
+    }
+
+    /** Tier 3: build the Ammo fallback URL. */
+    function buildAmmoHotPlaylistUrl(platform, catParam, page) {
+      const params = new URLSearchParams();
+      params.set('type', 'hot');
+      params.set('source', platform);
+      params.set('page', String(page));
+      params.set('limit', String(PL_LIMIT));
+      if (platform === 'wy' && catParam) params.set('cat', catParam);
+      else if (platform === 'tx' && catParam) params.set('cat', catParam);
+      return `${AMMO_BASE}/api/playlist.php?${params.toString()}`;
     }
 
     function openPlaylistById(source, id) {

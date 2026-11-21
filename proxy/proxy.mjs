@@ -14,7 +14,9 @@
 
 const ALLOWED_HOSTS = new Set([
   'interface.music.163.com',     // 网易云
+  'music.163.com',               // 网易云（歌单等公开接口）
   'u.y.qq.com',                  // QQ音乐
+  'c.y.qq.com',                  // QQ音乐 fcg
   'songsearch.kugou.com',        // 酷狗
   'www.kuwo.cn',                 // 酷我
   'mplayer.kugou.com',           // 酷狗播放器
@@ -22,6 +24,15 @@ const ALLOWED_HOSTS = new Set([
   'cscs.migu.cn',                // 咪咕
   'app.c.nf.migu.cn',            // 咪咕新版
 ]);
+
+// Per-host default headers — some platforms gatekeep by Referer/User-Agent.
+const DEFAULT_HEADERS = {
+  'music.163.com':       { Referer: 'https://music.163.com/' },
+  'interface.music.163.com': { Referer: 'https://music.163.com/' },
+  'c.y.qq.com':          { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
+  'u.y.qq.com':          { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
+  'www.kuwo.cn':         { Referer: 'https://www.kuwo.cn/' },
+};
 
 // Map source key → {host, pathTemplate} so we can rewrite URLs correctly
 const SOURCE_CONFIG = {
@@ -102,9 +113,10 @@ export async function proxyRequest(req, res) {
   delete options.headers['host']; // will be set by http/https module
 
   const httpMod = target.protocol === 'https:' ? await import('https') : await import('http');
-  
+
+  const hostDefaults = DEFAULT_HEADERS[parsed.hostname] || {};
   return new Promise((resolve) => {
-    const proxyReq = httpMod.request(options, (proxyRes) => {
+    const proxyReq = httpMod.request({ ...options, headers: { ...hostDefaults, ...options.headers } }, (proxyRes) => {
       res.writeHead(proxyRes.statusCode || 200, {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
