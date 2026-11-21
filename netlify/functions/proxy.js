@@ -6,12 +6,13 @@ const ALLOWED_HOSTS = new Set([
   'interface.music.163.com', 'music.163.com',
   'u.y.qq.com', 'c.y.qq.com',
   'songsearch.kugou.com', 'mplayer.kugou.com', 'krcs.kugou.com',
-  'www2.kugou.kugou.com',        // 酷狗热门歌单列表
+  'www2.kugou.kugou.com',        // 酷狗热门歌单列表（HTTP only — HTTPS 证书对 US IP 验证失败）
   'www.kugou.com',
   'www.kuwo.cn', 'search.kuwo.cn',  // 酷我搜索/推荐歌单
   'wapi.kuwo.cn',                // 酷我推荐歌单 API
   'mobileinterfaces.kuwo.cn',
   'app.c.nf.migu.cn', 'cscs.migu.cn',
+  'music-ammo-api-gateway.xlz767.dpdns.org',  // Ammo 后端（mg 搜索等需签名的端点经代理转发）
 ]);
 
 // Per-host default headers — some platforms gatekeep by Referer/User-Agent.

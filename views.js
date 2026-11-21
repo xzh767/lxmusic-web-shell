@@ -181,6 +181,7 @@
     if (kind === 'search') {
       const [platform, keyword, page] = args;
       // Per-platform search URL (mirrors lx-music-desktop; kw uses search.kuwo.cn/r.s)
+      // mg search needs server-side signing → forward to Ammo via proxy (same as lyric/playlist pattern)
       const mapping = {
         wy: { u: 'https://interface.music.163.com/eapi/search/web',
               qs: (kw, p) => `s=${encodeURIComponent(kw)}&limit=30&offset=${(p-1)*30}&total=true` },
@@ -190,6 +191,9 @@
               qs: (kw, p) => `keyword=${encodeURIComponent(kw)}&page=${p}&pagesize=30&token=&platform=web_kuqin&version=10100100&antId=&guid=` },
         kw: { u: 'https://search.kuwo.cn/r.s',
               qs: (kw, p) => `client=kt&all=${encodeURIComponent(kw)}&pn=${p-1}&rn=30&uid=794762570&ver=kwplayer_ar_9.2.2.1&vipver=1&show_copyright_off=1&newver=1&ft=music&cluster=0&strategy=2012&encoding=utf8&rformat=json&vermerge=1&mobi=1&issubtitle=1` },
+        // mg: signing is server-side only → forward to Ammo search.php via proxy
+        mg: { u: AMMO_BASE + '/api/search.php',
+              qs: (kw, p) => `source=mg&keyword=${encodeURIComponent(kw)}&page=${p}&limit=30` },
       };
       const cfg = mapping[platform];
       if (!cfg) throw new Error(`unknown platform ${platform} for proxy search`);
