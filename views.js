@@ -925,11 +925,12 @@
         return `https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg?${qs.toString()}`;
       }
       if (platform === 'kg') {
-        // KuGou special list — no auth needed; sortId defaults to '5' (推荐)
+        // KuGou special list — HTTP only (HTTPS cert fails from US datacenter IPs)
+        // Browser direct (Tier 1) will be blocked by mixed-content; Tier 2 proxy handles it.
         const qs = new URLSearchParams({
           is_ajax: '1', cdn: 'cdn', t: catParam || '5', c: '', p: String(page + 1),
         });
-        return `https://www2.kugou.kugou.com/yueku/v9/special/getSpecial?${qs.toString()}`;
+        return `http://www2.kugou.kugou.com/yueku/v9/special/getSpecial?${qs.toString()}`;
       }
       if (platform === 'kw') {
         // KuWo recommendation API — no auth needed
