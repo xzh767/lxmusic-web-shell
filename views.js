@@ -241,8 +241,8 @@
       };
     }
     if (platform === 'kw') {
-      // kw search.kuwo.cn/r.s returns a raw JSON array of song objects.
-      const items = Array.isArray(raw) ? raw : (raw?.list || []);
+      // kw search.kuwo.cn/r.s returns {TOTAL: "...", abslist: [{MUSICRID, NAME, ARTIST, ...}]}
+      const items = Array.isArray(raw) ? raw : (raw?.abslist || raw?.list || []);
       return {
         results: items.map((s) => ({
           source: 'kw',
@@ -253,7 +253,8 @@
           album: s.ALBUM || s.album || '',
           duration: Number(s.DURATION) || 0,
           strMediaMid: s.MUSICRID?.replace('MUSIC_', '') || '',
-        })).filter((s) => s.id),
+          picture: s.web_artistpic_short ? `https://img.kuwo.cn/star/${s.web_artistpic_short}` : '',
+        })).filter((s) => s.id && s.name),
         errors: [],
       };
     }
