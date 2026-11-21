@@ -15,9 +15,9 @@
   const PLAYLIST_PLATFORMS = {
     wy: { label: '网易云', ok: true, catKey: 'wyCats' },
     tx: { label: 'QQ音乐', ok: true, catKey: 'txCats' },
-    kg: { label: '酷狗', ok: false, catKey: null },
-    kw: { label: '酷我', ok: false, catKey: null },
-    mg: { label: '咪咕', ok: false, catKey: null },
+    kg: { label: '酷狗', ok: true,  catKey: 'kgSorts' },
+    kw: { label: '酷我', ok: true,  catKey: 'kwOrders' },
+    mg: { label: '咪咕', ok: true,  catKey: null     },
   };
   /** Wy category name → URL-encoded name; empty string = 全部 */
   const WY_CATS = [
@@ -25,7 +25,7 @@
     { name: '流行', cat: '%E6%B5%81%E8%A1%8C' },
     { name: '华语', cat: '%E5%8D%8E%E8%AF%AD' },
     { name: '欧美', cat: '%E6%AC%A7%E7%BE%8E' },
-    { name: 'ACG', cat: 'ACG' },
+    { name: 'ACG',  cat: 'ACG' },
     { name: '摇滚', cat: '%E6%91%87%E6%BB%9A' },
     { name: '民谣', cat: '%E6%B0%91%E4%B9%90' },
     { name: '影视原声', cat: '%E5%BD%B1%E8%A7%86%E5%8E%9F%E5%A3%B0' },
@@ -35,11 +35,24 @@
     { name: '清新', cat: '%E6%B8%85%E6%96%B0' },
     { name: '综艺', cat: '%E5%BA%86%E8%89%BA' },
   ];
-  // QQ Music uses numeric categoryId; 10000000 = 全部, others not tested
+  // QQ Music uses numeric categoryId; 10000000 = 全部
   const TX_CATS = [{ name: '全部', cat: 10000000 }];
+  // KuGou sort mode IDs — matches LX Desktop sortList exactly
+  const KG_SORTS = [
+    { name: '推荐',  id: '5' },
+    { name: '最热',  id: '6' },
+    { name: '最新',  id: '7' },
+    { name: '热藏',  id: '3' },
+    { name: '飙升',  id: '8' },
+  ];
+  // KuWo: only two sort modes
+  const KW_ORDERS = [
+    { name: '最热', order: 'hot' },
+    { name: '最新', order: 'new' },
+  ];
   let _plSource = 'wy';
-  let _plPage = 0;
-  let _plTag = '';
+  let _plPage   = 0;
+  let _plTag    = '';
   const PL_LIMIT = 30;
 
   /* ── Auto-detecting edge proxy (zero-config) ──────────────────────────────
@@ -723,22 +736,31 @@
       const cfg = PLAYLIST_PLATFORMS[_plSource];
       if (!cfg || !cfg.ok) { row.classList.add('hidden'); return; }
       row.classList.remove('hidden');
-      const cats = _plSource === 'wy' ? WY_CATS : TX_CATS;
+      let items;
+      if (_plSource === 'wy')  items = WY_CATS;
+      else if (_plSource === 'tx') items = TX_CATS;
+      else if (_plSource === 'kg') items = KG_SORTS;
+      else if (_plSource === 'kw') items = KW_ORDERS;
+      else items = []; // mg has no tags
       row.innerHTML = '';
-      cats.forEach((cat, i) => {
+      items.forEach((item) => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'cat-tab' + (cat.name === '全部' && !_plTag ? ' active' : '');
-        btn.textContent = cat.name;
+        const isActive = _plSource === 'kg' ? item.id === _plTag
+                       : _plSource === 'kw' ? item.order === _plTag
+                       : (! _plTag && item.name === '全部');
+        btn.className = 'cat-tab' + (isActive ? ' active' : '');
+        btn.textContent = item.name;
         btn.addEventListener('click', () => {
           row.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
           btn.classList.add('active');
-          _plTag = String(cat.cat);
+          _plTag = _plSource === 'kg' ? item.id : item.order ?? String(item.cat ?? item.id ?? '');
           _plPage = 0;
           loadPlaylistPage();
         });
         row.appendChild(btn);
       });
+      if (_plSource === 'mg') row.classList.add('hidden');
     }
 
     async function loadPlaylistPage() {
@@ -857,23 +879,33 @@
         // QQ Music fcg endpoint; categoryId defaults to 10000000 (全部)
         const categoryId = catParam ? Number(catParam) : 10000000;
         const qs = new URLSearchParams({
-          picmid: '1',
-          rnd: Math.random().toString(),
-          g_tk: '732560869',
-          loginUin: '0',
-          hostUin: '0',
-          format: 'json',
-          inCharset: 'utf8',
-          outCharset: 'utf-8',
-          notice: '0',
-          platform: 'yqq.json',
-          needNewCode: '0',
-          categoryId: String(categoryId),
-          sortId: '5',
-          sin: String(offset),
-          ein: String(offset + PL_LIMIT),
+          picmid: '1', rnd: Math.random().toString(), g_tk: '732560869',
+          loginUin: '0', hostUin: '0', format: 'json', inCharset: 'utf8',
+          outCharset: 'utf-8', notice: '0', platform: 'yqq.json', needNewCode: '0',
+          categoryId: String(categoryId), sortId: '5',
+          sin: String(offset), ein: String(offset + PL_LIMIT),
         });
         return `https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg?${qs.toString()}`;
+      }
+      if (platform === 'kg') {
+        // KuGou special list — no auth needed; sortId defaults to '5' (推荐)
+        const qs = new URLSearchParams({
+          is_ajax: '1', cdn: 'cdn', t: catParam || '5', c: '', p: String(page + 1),
+        });
+        return `https://www2.kugou.kugou.com/yueku/v9/special/getSpecial?${qs.toString()}`;
+      }
+      if (platform === 'kw') {
+        // KuWo recommendation API — no auth needed
+        const order = catParam || 'hot';
+        const qs = new URLSearchParams({
+          loginUid: '0', loginSid: '0', appUid: '76039576',
+          pn: String(page + 1), rn: String(PL_LIMIT), order,
+        });
+        return `https://wapi.kuwo.cn/api/pc/classify/playlist/getRcmPlayList?${qs.toString()}`;
+      }
+      if (platform === 'mg') {
+        // Migu playlist square recommend — nested tree; pageNo = page+1
+        return `https://app.c.nf.migu.cn/pc/bmw/page-data/playlist-square-recommend/v1.0?templateVersion=2&pageNo=${page + 1}`;
       }
       throw new Error(`unsupported platform for hot playlists: ${platform}`);
     }
@@ -882,29 +914,68 @@
     function parseHotPlaylistResponse(platform, raw) {
       if (platform === 'wy') {
         const items = Array.isArray(raw?.playlists) ? raw.playlists : [];
-        const playlists = items.map((p) => ({
-          id: String(p.id ?? ''),
-          source: 'wy',
-          title: p.name ?? '',
-          creator: p.creator?.nickname ?? '',
-          cover: p.coverImgUrl ?? p.picUrl ?? '',
+        return { ok: true, total: raw?.total ?? items.length, playlists: items.map((p) => ({
+          id: String(p.id ?? ''), source: 'wy', title: p.name ?? '',
+          creator: p.creator?.nickname ?? '', cover: p.coverImgUrl ?? p.picUrl ?? '',
           trackCount: p.trackCount ?? 0,
-        })).filter((p) => p.id && p.title);
-        return { ok: true, total: raw?.total ?? items.length, playlists };
+        })).filter((p) => p.id && p.title) };
       }
       if (platform === 'tx') {
         const items = Array.isArray(raw?.data?.list) ? raw.data.list : [];
-        const playlists = items.map((item) => ({
-          id: String(item.dissid ?? ''),
-          source: 'tx',
-          title: item.dissname ?? '',
-          creator: item.nick ?? item.creator ?? '',
-          cover: item.imgurl ?? '',
+        return { ok: true, total: raw?.data?.sum ?? items.length, playlists: items.map((item) => ({
+          id: String(item.dissid ?? ''), source: 'tx', title: item.dissname ?? '',
+          creator: item.nick ?? item.creator ?? '', cover: item.imgurl ?? '', trackCount: 0,
+        })).filter((p) => p.id && p.title) };
+      }
+      if (platform === 'kg') {
+        // Ammo returns {ok:true, playlists:[...]} with standard fields
+        // Raw endpoint returns {special_db:[{specialid,specialname,nickname,img,song_count,...}]}
+        const rawItems = Array.isArray(raw?.special_db) ? raw.special_db
+                        : Array.isArray(raw?.playlists) ? raw.playlists : [];
+        return { ok: true, total: rawItems.length, playlists: rawItems.map((item) => ({
+          id: String(item.specialid ?? item.id ?? ''), source: 'kg',
+          title: item.specialname ?? item.name ?? '',
+          creator: item.nickname ?? '',
+          cover: (item.img ?? '').replace(/^http:/, 'https:'),
+          trackCount: parseInt(item.song_count ?? item.total ?? 0, 10) || 0,
+        })).filter((p) => p.id && p.title) };
+      }
+      if (platform === 'kw') {
+        const data = raw?.data ?? {};
+        const items = Array.isArray(data.data) ? data.data
+                      : Array.isArray(raw?.playlists) ? raw.playlists : [];
+        return { ok: true, total: data.total ?? items.length, playlists: items.map((item) => ({
+          id: String(item.id ?? ''), source: 'kw', title: item.name ?? '',
+          creator: item.uname ?? '', cover: (item.img ?? '').replace(/^http:/, 'https:'),
+          trackCount: parseInt(item.total ?? 0, 10) || 0,
+        })).filter((p) => p.id && p.title) };
+      }
+      if (platform === 'mg') {
+        // Ammo returns {ok:true, playlists:[...]}; raw nested tree flattened by pl_hot_mg
+        const items = Array.isArray(raw?.playlists) ? raw.playlists
+                      : Array.isArray(raw?.contents) ? flattenMgTree(raw.contents) : [];
+        return { ok: true, total: items.length, playlists: items.map((p) => ({
+          id: String(p.id ?? ''), source: 'mg', title: p.title ?? '',
+          creator: p.creator ?? '', cover: (p.cover ?? '').replace(/^http:/, 'https:'),
           trackCount: 0,
-        })).filter((p) => p.id && p.title);
-        return { ok: true, total: raw?.data?.sum ?? playlists.length, playlists };
+        })).filter((p) => p.id && p.title) };
       }
       throw new Error('unknown platform');
+    }
+
+    /** Recursively flatten Migu's nested content tree to extract resourceType=2021 items. */
+    function flattenMgTree(obj, results = []) {
+      if (!obj) return results;
+      if (Array.isArray(obj)) { obj.forEach((i) => flattenMgTree(i, results)); return results; }
+      if (typeof obj !== 'object') return results;
+      const resType = String(obj.resourceType ?? '');
+      if (resType === '2021' && obj.resId) {
+        results.push({ id: String(obj.resId), title: obj.txt || obj.contentName || '', cover: obj.img || obj.img2 || '' });
+      }
+      for (const v of Object.values(obj)) {
+        if (v && typeof v === 'object') flattenMgTree(v, results);
+      }
+      return results;
     }
 
     /** Tier 1: attempt direct browser call (may fail due to CORS). */

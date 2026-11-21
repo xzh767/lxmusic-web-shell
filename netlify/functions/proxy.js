@@ -6,17 +6,24 @@ const ALLOWED_HOSTS = new Set([
   'interface.music.163.com', 'music.163.com',
   'u.y.qq.com', 'c.y.qq.com',
   'songsearch.kugou.com', 'mplayer.kugou.com', 'krcs.kugou.com',
+  'www2.kugou.kugou.com',        // 酷狗热门歌单列表
+  'www.kugou.com',
   'www.kuwo.cn',
+  'wapi.kuwo.cn',                // 酷我推荐歌单 API
+  'mobileinterfaces.kuwo.cn',
   'app.c.nf.migu.cn', 'cscs.migu.cn',
 ]);
 
 // Per-host default headers — some platforms gatekeep by Referer/User-Agent.
 const DEFAULT_HEADERS = {
-  'music.163.com': { Referer: 'https://music.163.com/' },
-  'interface.music.163.com': { Referer: 'https://music.163.com/' },
-  'c.y.qq.com':     { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
-  'u.y.qq.com':     { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
-  'www.kuwo.cn':    { Referer: 'https://www.kuwo.cn/' },
+  'music.163.com':              { Referer: 'https://music.163.com/' },
+  'interface.music.163.com':    { Referer: 'https://music.163.com/' },
+  'c.y.qq.com':                 { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
+  'u.y.qq.com':                 { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
+  'www.kuwo.cn':                { Referer: 'https://www.kuwo.cn/' },
+  'wapi.kuwo.cn':               { Referer: 'https://www.kuwo.cn/' },
+  'www2.kugou.kugou.com':       { 'User-Agent': 'Mozilla/5.0' },
+  'app.c.nf.migu.cn':           { Referer: 'https://music.migu.cn/' },
 };
 
 async function proxyRequest(event, context) {
