@@ -10,9 +10,18 @@
   const AMMO_BASE = 'https://music-ammo-api-gateway.xlz767.dpdns.org';
   const { $, esc, showNotice, hideNotice, toast } = A;
 
-  /* ── Hot playlist state ─────────────────────────────────────────────── */
-  const WY_CATEGORIES = [
-    { name: '全部', cat: '%E5%85%A8%E9%83%A8' },
+  /* ── Online playlist (hot/recommend) state ─────────────────────────────── */
+  // Each platform: label, whether hot playlists work, category map
+  const PLAYLIST_PLATFORMS = {
+    wy: { label: '网易云', ok: true, catKey: 'wyCats' },
+    tx: { label: 'QQ音乐', ok: true, catKey: 'txCats' },
+    kg: { label: '酷狗', ok: false, catKey: null },
+    kw: { label: '酷我', ok: false, catKey: null },
+    mg: { label: '咪咕', ok: false, catKey: null },
+  };
+  /** Wy category name → URL-encoded name; empty string = 全部 */
+  const WY_CATS = [
+    { name: '全部', cat: '' },
     { name: '流行', cat: '%E6%B5%81%E8%A1%8C' },
     { name: '华语', cat: '%E5%8D%8E%E8%AF%AD' },
     { name: '欧美', cat: '%E6%AC%A7%E7%BE%8E' },
@@ -26,8 +35,12 @@
     { name: '清新', cat: '%E6%B8%85%E6%96%B0' },
     { name: '综艺', cat: '%E5%BA%86%E8%89%BA' },
   ];
-  let _hotPage = 0;
-  const HOT_LIMIT = 30;
+  // QQ Music uses numeric categoryId; 10000000 = 全部, others not tested
+  const TX_CATS = [{ name: '全部', cat: 10000000 }];
+  let _plSource = 'wy';
+  let _plPage = 0;
+  let _plTag = '';
+  const PL_LIMIT = 30;
 
   /* ── Auto-detecting edge proxy (zero-config) ──────────────────────────────
    *
@@ -682,37 +695,74 @@
       if (event.key === 'Enter') openPlaylist();
     });
 
-    // ── Hot playlist UI ──────────────────────────────────────────────────
-    function renderHotCategories() {
-      const container = $('categoryTabs');
-      container.innerHTML = '';
-      WY_CATEGORIES.forEach((c, i) => {
+    // ── Online playlist (hot/recommend) ──────────────────────────────────────
+    function renderPlatformTabs() {
+      const row = $('playlistPlatformRow');
+      row.innerHTML = '';
+      for (const [key, cfg] of Object.entries(PLAYLIST_PLATFORMS)) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'cat-tab' + (i === 0 ? ' active' : '');
-        btn.textContent = c.name;
+        btn.className = 'pl-plat-btn'
+          + (key === _plSource ? ' active' : '')
+          + (cfg.ok ? '' : ' unsupported');
+        btn.textContent = cfg.label;
+        if (cfg.ok) {
+          btn.addEventListener('click', () => {
+            _plSource = key; _plPage = 0; _plTag = '';
+            renderPlatformTabs();
+            renderTagChips();
+            loadPlaylistPage();
+          });
+        }
+        row.appendChild(btn);
+      }
+    }
+
+    function renderTagChips() {
+      const row = $('playlistTagRow');
+      const cfg = PLAYLIST_PLATFORMS[_plSource];
+      if (!cfg || !cfg.ok) { row.classList.add('hidden'); return; }
+      row.classList.remove('hidden');
+      const cats = _plSource === 'wy' ? WY_CATS : TX_CATS;
+      row.innerHTML = '';
+      cats.forEach((cat, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cat-tab' + (cat.name === '全部' && !_plTag ? ' active' : '');
+        btn.textContent = cat.name;
         btn.addEventListener('click', () => {
-          container.querySelectorAll('.cat-tab').forEach((t) => t.classList.remove('active'));
+          row.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
           btn.classList.add('active');
-          _hotPage = 0;
-          renderHotPlaylists(c.cat, _hotPage);
+          _plTag = String(cat.cat);
+          _plPage = 0;
+          loadPlaylistPage();
         });
-        container.appendChild(btn);
+        row.appendChild(btn);
       });
     }
 
-    async function renderHotPlaylists(category, page) {
-      const grid = $('hotPlaylistGrid');
-      const moreBtn = $('hotPlaylistMoreBtn');
+    async function loadPlaylistPage() {
+      const grid = $('playlistGrid');
+      const moreBtn = $('plMoreBtn');
+      const notice = $('plNotice');
+      const cfg = PLAYLIST_PLATFORMS[_plSource];
+      if (!cfg || !cfg.ok) {
+        grid.innerHTML = '<div class="empty" style="grid-column:1/-1">该平台暂不支持在线歌单推荐</div>';
+        moreBtn.classList.add('hidden');
+        showNotice('plNotice', `${cfg?.label || _plSource} 的热门歌单功能尚未接入`, 'warning');
+        return;
+      }
       grid.innerHTML = '<div class="empty" style="grid-column:1/-1">加载中…</div>';
       moreBtn.classList.add('hidden');
+      hideNotice('plNotice');
       try {
         const params = new URLSearchParams();
         params.set('type', 'hot');
-        params.set('source', 'wy');
-        params.set('cat', category);
-        params.set('page', String(page));
-        params.set('limit', String(HOT_LIMIT));
+        params.set('source', _plSource);
+        params.set('page', String(_plPage));
+        params.set('limit', String(PL_LIMIT));
+        if (_plSource === 'wy' && _plTag) params.set('cat', _plTag);
+        else if (_plSource === 'tx' && _plTag) params.set('cat', _plTag);
         const data = await window.LX_AMMO.fetchJsonWithRetry(
           `${AMMO_BASE}/api/playlist.php?${params.toString()}`,
           { cache: 'no-store' },
@@ -725,8 +775,7 @@
         for (const pl of data.playlists) {
           const card = document.createElement('div');
           card.className = 'pl-card';
-          const cover = pl.cover || '';
-          const thumb = cover.includes('http://') ? cover.replace('http://', 'https://') : cover;
+          const thumb = (pl.cover || '').replace(/^http:/, 'https:');
           card.innerHTML = `
             <img class="pl-card-cover" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">
             <div class="pl-card-info">
@@ -736,19 +785,16 @@
           card.addEventListener('click', () => openPlaylistById(pl.source, pl.id));
           grid.appendChild(card);
         }
-        // Show "load more" if there are more pages
-        if ((page + 1) * HOT_LIMIT < (data.total || 0)) {
+        if (( _plPage + 1 ) * PL_LIMIT < (data.total || 0)) {
           moreBtn.classList.remove('hidden');
           moreBtn.disabled = false;
           moreBtn.textContent = '加载更多';
-          moreBtn.onclick = () => {
-            _hotPage++;
-            renderHotPlaylists(category, _hotPage);
-          };
+          moreBtn.onclick = () => { _plPage++; loadPlaylistPage(); };
         }
+        showNotice('plNotice', `共 ${data.total || '?'} 个歌单`, 'success');
       } catch (err) {
         grid.innerHTML = `<div class="empty">加载失败：${esc(err.message)}</div>`;
-        console.error('[热门歌单] 失败', err);
+        console.error('[在线歌单] 失败', err);
       }
     }
 
@@ -758,9 +804,9 @@
       openPlaylist();
     }
 
-    renderHotCategories();
-    renderHotPlaylists(WY_CATEGORIES[0].cat, 0);
-
+    renderPlatformTabs();
+    renderTagChips();
+    loadPlaylistPage();
     $('loadAmmoButton').addEventListener('click', loadManifest);
     $('lxLoadButton').addEventListener('click', () => loadLxScriptFromFile($('lxSourceFile').files[0]));
     $('lxLoadUrlButton').addEventListener('click', loadLxScriptFromUrl);

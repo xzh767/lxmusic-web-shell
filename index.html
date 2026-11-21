@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#131313">
   <title>LX Music Web Shell</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🎵%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=20261120m">
+  <link rel="stylesheet" href="style.css?v=20261120n">
 </head>
 <body>
   <div class="app">
@@ -134,21 +134,24 @@
       </section>
 
       <section class="view" data-view="playlists">
-        <!-- 推荐歌单 -->
+        <!-- 推荐歌单 / 歌单分类 -->
         <div class="card">
-          <div class="hot-section">
-            <div class="hot-header-row">
-              <span class="hot-title">🔥 热门歌单（网易云）</span>
-            </div>
-            <div id="categoryTabs" class="category-tabs"></div>
-            <div id="hotPlaylistGrid" class="pl-grid"></div>
-            <button type="button" id="hotPlaylistMoreBtn" class="pl-page-btn hidden">加载更多</button>
+          <div class="section-head compact">
+            <div><h2>在线歌单</h2></div>
           </div>
+          <!-- 平台选择行（参照 LX Desktop 右上角平台切换） -->
+          <div class="platform-row" id="playlistPlatformRow"></div>
+          <!-- 分类 chip 行 -->
+          <div id="playlistTagRow" class="tag-row hidden"></div>
+          <!-- 卡片网格 -->
+          <div id="playlistGrid" class="pl-grid"></div>
+          <button type="button" id="plMoreBtn" class="pl-page-btn hidden">加载更多</button>
+          <div id="plNotice" class="notice hidden"></div>
         </div>
         <div class="card">
           <div class="section-head">
             <div>
-              <h2>歌单</h2>
+              <h2>打开歌单</h2>
               <p>粘贴歌单链接自动识别平台；或选择平台后填歌单 ID。</p>
             </div>
           </div>
@@ -330,16 +333,16 @@
 
   <div id="toastBox" class="toast-box"></div>
 
-  <script src="theme.js?v=20261120m" defer></script>
-  <script src="sources.js?v=20261120m" defer></script>
-  <script src="lyrics.js?v=20261120m" defer></script>
-  <script src="app.js?v=20261120m" defer></script>
+  <script src="theme.js?v=20261120n" defer></script>
+  <script src="sources.js?v=20261120n" defer></script>
+  <script src="lyrics.js?v=20261120n" defer></script>
+  <script src="app.js?v=20261120n" defer></script>
   <!-- Auto-detecting edge CORS proxy — placed before views.js so proxy discovery
        completes before any search/lyric request is made. If no local proxy exists,
        requests silently fall back to the Ammo gateway (zero-config).
        Deploy proxy/netlify/functions/proxy.js or proxy/_functions/proxy/*.ts alongside
        this project for automatic detection on Netlify / CF Pages. -->
-  <script src="proxy/auto-proxy.js?v=20261120m" defer></script>
-  <script src="views.js?v=20261120m" defer></script>
+  <script src="proxy/auto-proxy.js?v=20261120n" defer></script>
+  <script src="views.js?v=20261120n" defer></script>
 </body>
 </html>
