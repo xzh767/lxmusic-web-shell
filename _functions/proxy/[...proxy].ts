@@ -7,7 +7,8 @@ const ALLOWED_HOSTS = new Set([
   'interface.music.163.com', 'music.163.com',
   'u.y.qq.com', 'c.y.qq.com',
   'songsearch.kugou.com', 'mplayer.kugou.com', 'krcs.kugou.com',
-  'www.kuwo.cn',
+  'www2.kugou.kugou.com',
+  'www.kuwo.cn', 'search.kuwo.cn', 'wapi.kuwo.cn',
   'app.c.nf.migu.cn', 'cscs.migu.cn',
 ]);
 

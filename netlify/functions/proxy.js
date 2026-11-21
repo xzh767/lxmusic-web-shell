@@ -8,7 +8,7 @@ const ALLOWED_HOSTS = new Set([
   'songsearch.kugou.com', 'mplayer.kugou.com', 'krcs.kugou.com',
   'www2.kugou.kugou.com',        // 酷狗热门歌单列表
   'www.kugou.com',
-  'www.kuwo.cn',
+  'www.kuwo.cn', 'search.kuwo.cn',  // 酷我搜索/推荐歌单
   'wapi.kuwo.cn',                // 酷我推荐歌单 API
   'mobileinterfaces.kuwo.cn',
   'app.c.nf.migu.cn', 'cscs.migu.cn',
@@ -21,8 +21,10 @@ const DEFAULT_HEADERS = {
   'c.y.qq.com':                 { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
   'u.y.qq.com':                 { Referer: 'https://y.qq.com/', 'User-Agent': 'Mozilla/5.0' },
   'www.kuwo.cn':                { Referer: 'https://www.kuwo.cn/' },
+  'search.kuwo.cn':             { Referer: 'https://www.kuwo.cn/' },
   'wapi.kuwo.cn':               { Referer: 'https://www.kuwo.cn/' },
-  'www2.kugou.kugou.com':       { 'User-Agent': 'Mozilla/5.0' },
+  'www2.kugou.kugou.com':       { 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.kugou.com/' },
+  'songsearch.kugou.com':       { 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.kugou.com/' },
   'app.c.nf.migu.cn':           { Referer: 'https://music.migu.cn/' },
 };
 

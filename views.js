@@ -134,23 +134,41 @@
 
   /** Build the correct upstream URL per platform and attempt a direct browser call. */
   async function fetchDirectSearch(platform, keyword, page) {
+    // Per-platform endpoint + params — mirrors lx-music-desktop source.
     const ENDPOINTS = {
-      wy: () => 'https://interface.music.163.com/eapi/search/web',
-      tx: () => 'https://u.y.qq.com/cgi-bin/musicu.fcg',
-      kg: () => 'https://songsearch.kugou.com/song_search_v2',
-      kw: () => 'https://www.kuwo.cn/api/www/search/searchKey',
-      mg: () => null, // 咪咕搜索接口暂不支持浏览器直连
+      wy: { url: 'https://interface.music.163.com/eapi/search/web',
+            buildParams: (kw, p) => new URLSearchParams({ s: kw, limit: '30', offset: String((p-1)*30), total: 'true' }).toString() },
+      tx: { url: 'https://u.y.qq.com/cgi-bin/musicu.fcg',
+            buildParams: (kw, p) => new URLSearchParams({
+              loginUin: '0', hostUin: '0', format: 'json', inCharset: 'utf8', outCharset: 'utf-8',
+              notice: '0', platform: 'yqq.json', needNewCode: '0',
+              data: JSON.stringify({
+                comm: { cv: 1602, ct: 20 },
+                'music.search.SearchCgiService': {
+                  module: 'music.search.SearchCgiService', method: 'DoSearchForQQMusicDesktop',
+                  param: { grp: 1, num_per_page: 30, page_num: p, query: kw, search_type: 0 },
+                },
+              }),
+            }).toString() },
+      kg: { url: 'https://songsearch.kugou.com/song_search_v2',
+            buildParams: (kw, p) => new URLSearchParams({
+              keyword: kw, page: String(p), pagesize: '30', token: '',
+              platform: 'web_kuqin', version: '10100100', antId: '', guid: '',
+            }).toString() },
+      kw: { url: 'https://search.kuwo.cn/r.s',
+            buildParams: (kw, p) => new URLSearchParams({
+              client: 'kt', all: kw, pn: String(p-1), rn: '30',
+              uid: '794762570', ver: 'kwplayer_ar_9.2.2.1', vipver: '1',
+              show_copyright_off: '1', newver: '1', ft: 'music', cluster: '0',
+              strategy: '2012', encoding: 'utf8', rformat: 'json', vermerge: '1',
+              mobi: '1', issubtitle: '1',
+            }).toString() },
+      mg: null, // 咪咕搜索需要签名，暂不支持直连/代理
     };
-    const url = ENDPOINTS[platform]?.();
-    if (!url) return [];
-
-    const params = new URLSearchParams({
-      s: keyword,
-      limit: '30',
-      offset: String((page - 1) * 30),
-      total: 'true',
-    });
-    const resp = await fetch(`${url}?${params}`, { cache: 'no-store' });
+    const cfg = ENDPOINTS[platform];
+    if (!cfg) return [];
+    const qs = cfg.buildParams(keyword, page);
+    const resp = await fetch(`${cfg.url}?${qs}`, { cache: 'no-store' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const raw = await resp.json();
     return normalizeSongResult(platform, raw)?.results || [];
@@ -159,24 +177,23 @@
   /** Forward a standardised internal request through the user's edge proxy. */
   async function fetchViaProxy(proxyBaseUrl, kind, ...args) {
     // Encode the target upstream URL so the proxy knows what to call.
-    // The proxy must decode it; we build a safe representation here.
     let targetUrl;
     if (kind === 'search') {
-      // Map our normalised args → platform-specific upstream URL the proxy understands.
       const [platform, keyword, page] = args;
+      // Per-platform search URL (mirrors lx-music-desktop; kw uses search.kuwo.cn/r.s)
       const mapping = {
-        wy: { u: 'https://interface.music.163.com/eapi/search/web', p: 's', o: { keyword, page, limit: 30 } },
-        tx: { u: 'https://u.y.qq.com/cgi-bin/musicu.fcg',           p: 'keyword', o: { keyword, page, limit: 30 } },
-        kg: { u: 'https://songsearch.kugou.com/song_search_v2',       p: 'keyword', o: { keyword, page, limit: 30 } },
-        kw: { u: 'https://www.kuwo.cn/api/www/search/searchKey',      p: 'keyword', o: { keyword, page, limit: 30 } },
+        wy: { u: 'https://interface.music.163.com/eapi/search/web',
+              qs: (kw, p) => `s=${encodeURIComponent(kw)}&limit=30&offset=${(p-1)*30}&total=true` },
+        tx: { u: 'https://u.y.qq.com/cgi-bin/musicu.fcg',
+              qs: (kw, p) => `loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0&data=${encodeURIComponent(JSON.stringify({comm:{cv:1602,ct:20},'music.search.SearchCgiService':{module:'music.search.SearchCgiService',method:'DoSearchForQQMusicDesktop',param:{grp:1,num_per_page:30,page_num:p,query:kw,search_type:0}}}))}` },
+        kg: { u: 'https://songsearch.kugou.com/song_search_v2',
+              qs: (kw, p) => `keyword=${encodeURIComponent(kw)}&page=${p}&pagesize=30&token=&platform=web_kuqin&version=10100100&antId=&guid=` },
+        kw: { u: 'https://search.kuwo.cn/r.s',
+              qs: (kw, p) => `client=kt&all=${encodeURIComponent(kw)}&pn=${p-1}&rn=30&uid=794762570&ver=kwplayer_ar_9.2.2.1&vipver=1&show_copyright_off=1&newver=1&ft=music&cluster=0&strategy=2012&encoding=utf8&rformat=json&vermerge=1&mobi=1&issubtitle=1` },
       };
       const cfg = mapping[platform];
-      if (!cfg) throw new Error(`unknown platform ${platform}`);
-      const qs = new URLSearchParams();
-      qs.set(cfg.p, cfg.o.keyword);
-      qs.set('pn', String(cfg.o.page));
-      qs.set('rn', String(cfg.o.limit));
-      targetUrl = `${cfg.u}?${qs.toString()}`;
+      if (!cfg) throw new Error(`unknown platform ${platform} for proxy search`);
+      targetUrl = `${cfg.u}?${cfg.qs(keyword, page)}`;
     } else if (kind === 'lyric') {
       // lyric.js passes (platform, id) — build the Ammo-compatible URL.
       const [platform, id] = args;
@@ -220,6 +237,23 @@
     if (platform === 'kg') {
       return {
         results: (raw?.data?.songlist || []).map((s) => ({ ...s, source: 'kg' })),
+        errors: [],
+      };
+    }
+    if (platform === 'kw') {
+      // kw search.kuwo.cn/r.s returns a raw JSON array of song objects.
+      const items = Array.isArray(raw) ? raw : (raw?.list || []);
+      return {
+        results: items.map((s) => ({
+          source: 'kw',
+          id: String(s.MUSICRID || s.rid || '').replace('MUSIC_', ''),
+          songId: String(s.MUSICRID || s.rid || '').replace('MUSIC_', ''),
+          name: s.NAME || s.songName || '',
+          artist: s.ARTIST || s.artist || '',
+          album: s.ALBUM || s.album || '',
+          duration: Number(s.DURATION) || 0,
+          strMediaMid: s.MUSICRID?.replace('MUSIC_', '') || '',
+        })).filter((s) => s.id),
         errors: [],
       };
     }

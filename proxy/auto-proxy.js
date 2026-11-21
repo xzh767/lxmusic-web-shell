@@ -33,22 +33,32 @@
       return ( _proxyUrl = manual );
     }
 
-    // Priority 2 & 3: auto-discover from well-known deployment paths
+    // Priority 2 & 3: auto-discover from well-known deployment paths.
+    // Use a GET with a minimal test URL to verify the proxy actually works
+    // (a bare HEAD with no-cors can't distinguish 200 from 404).
     const candidates = [
       `${location.origin}/.netlify/functions/proxy`,   // Netlify default
       `${location.origin}/proxy`,                       // CF Pages / Vercel / generic
     ];
+    const testTarget = encodeURIComponent('https://music.163.com/api/playlist/list?offset=0&limit=1');
 
     for (const url of candidates) {
       try {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 600);
-        await fetch(url, { method: 'HEAD', mode: 'no-cors', signal: ctrl.signal });
+        const timer = setTimeout(() => ctrl.abort(), 800);
+        const resp = await fetch(`${url}?url=${testTarget}`, { signal: ctrl.signal });
         clearTimeout(timer);
-        console.log(`[LX proxy] Discovered at ${url}`);
-        return (_proxyUrl = url);
+        if (resp.ok) {
+          const json = await resp.json();
+          // Accept any JSON with a recognised field (playlists, code, success, etc.)
+          if (json && typeof json === 'object') {
+            console.log(`[LX proxy] Discovered & verified at ${url}`);
+            return (_proxyUrl = url);
+          }
+        }
+        // Non-ok or non-JSON → next candidate
       } catch {
-        // Next candidate
+        // Network error or abort → next candidate
       }
     }
 

@@ -410,7 +410,7 @@
     box.querySelectorAll('[data-play-index]').forEach((button) => {
       button.addEventListener('click', () => {
         const song = normalizeSong(items[Number(button.dataset.playIndex)]);
-        if (song) playSong(song, { queue: items.map(normalizeSong).filter(Boolean) });
+        if (song) playSong(song, { queue: [song] });
       });
     });
     // Push-to-queue handler (used by playlist view only; options.showPushButton must be true)
